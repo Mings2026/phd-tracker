@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
-  <title>PhD Tracker</title>
+  <title>PhD Tracker V1.1</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.json" />
 </head>
@@ -15,7 +15,7 @@
         <div class="brand-mark">P</div>
         <div>
           <div class="brand-title">PhD Tracker</div>
-          <div class="brand-subtitle">Research Dashboard</div>
+          <div class="brand-subtitle">Research Dashboard · V1.1</div>
         </div>
       </div>
 
@@ -74,6 +74,47 @@
               </div>
             </div>
             <div id="todayCategorySummary" class="summary-list"></div>
+          </div>
+        </div>
+
+        <div class="card timer-card">
+          <div class="section-heading-row">
+            <div>
+              <span class="eyebrow">Focus Timer</span>
+              <h2>实时计时器</h2>
+            </div>
+            <div class="timer-status" id="timerStatus">未开始</div>
+          </div>
+          <div class="timer-layout">
+            <div class="timer-display-wrap">
+              <div class="timer-display" id="timerDisplay">00:00:00</div>
+              <div class="timer-started-at" id="timerStartedAt">填写任务后点击开始，停止时会自动保存为时间记录。</div>
+            </div>
+            <div class="timer-fields">
+              <div class="timer-field timer-field-wide">
+                <label for="timerTitle">正在做什么</label>
+                <input id="timerTitle" placeholder="例如：COMSOL 冷板仿真" />
+              </div>
+              <div class="timer-field">
+                <label for="timerCategory">类别</label>
+                <select id="timerCategory"></select>
+              </div>
+              <div class="timer-field">
+                <label for="timerProject">项目 / 论文</label>
+                <input id="timerProject" list="projectDatalist" placeholder="例如：Paper 1" />
+              </div>
+              <div class="timer-field timer-field-wide">
+                <label for="timerTags">标签</label>
+                <input id="timerTags" placeholder="COMSOL, 冷板, 仿真" />
+              </div>
+            </div>
+          </div>
+          <div class="timer-actions">
+            <button class="primary-btn" id="timerStartBtn">▶ 开始计时</button>
+            <button class="secondary-btn hidden" id="timerPauseBtn">暂停</button>
+            <button class="primary-btn hidden" id="timerResumeBtn">继续</button>
+            <button class="secondary-btn hidden" id="timerStopBtn">■ 停止并保存</button>
+            <button class="danger-btn hidden" id="timerCancelBtn">放弃计时</button>
           </div>
         </div>
 
@@ -177,6 +218,38 @@
           </div>
         </div>
 
+        <div class="card heatmap-card">
+          <div class="section-heading-row">
+            <div>
+              <span class="eyebrow">Research Heatmap</span>
+              <h3>年度科研热力图</h3>
+            </div>
+            <div class="date-controls">
+              <button class="icon-btn" id="heatmapPrevYearBtn">←</button>
+              <strong id="heatmapYearLabel">—</strong>
+              <button class="icon-btn" id="heatmapNextYearBtn">→</button>
+            </div>
+          </div>
+          <div class="heatmap-summary" id="heatmapSummary"></div>
+          <div class="heatmap-scroll">
+            <div class="heatmap-shell">
+              <div class="heatmap-week-labels"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div>
+              <div>
+                <div class="heatmap-months" id="heatmapMonths"></div>
+                <div class="heatmap-grid" id="researchHeatmap"></div>
+              </div>
+            </div>
+          </div>
+          <div class="heatmap-legend"><span>少</span><i class="heat-0"></i><i class="heat-1"></i><i class="heat-2"></i><i class="heat-3"></i><i class="heat-4"></i><span>多</span><span class="heatmap-note">仅统计“科研”类别</span></div>
+        </div>
+
+        <div class="card project-stats-card">
+          <div class="section-heading-row compact">
+            <div><span class="eyebrow">Projects & Papers</span><h3>项目 / 论文维度统计</h3></div>
+          </div>
+          <div id="projectStats" class="project-stat-grid"></div>
+        </div>
+
         <div class="card">
           <div class="section-heading-row compact"><div><span class="eyebrow">Trend</span><h3>每日投入趋势</h3></div></div>
           <div id="trendChart" class="trend-chart"></div>
@@ -221,15 +294,24 @@
               <button class="secondary-btn" id="addCategoryBtn">添加</button>
             </div>
           </div>
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Projects & Papers</span><h3>项目 / 论文</h3></div></div>
+            <p class="muted">用于把时间归属到某篇论文或某个科研项目。你也可以在记录窗口里直接输入新项目。</p>
+            <div id="projectManager" class="category-manager"></div>
+            <div class="inline-form">
+              <input id="newProjectInput" placeholder="例如：歧管微通道 Paper 1" />
+              <button class="secondary-btn" id="addProjectBtn">添加</button>
+            </div>
+          </div>
           <div class="card danger-zone">
             <div class="section-heading-row compact"><div><span class="eyebrow">Danger Zone</span><h3>清空数据</h3></div></div>
             <p class="muted">此操作不可撤销，建议先导出备份。</p>
             <button class="danger-btn" id="clearAllBtn">清空全部本地数据</button>
           </div>
           <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1</h3></div></div>
-            <p class="muted">当前版本：时间记录、自由标签、日历、备忘录、统计、导入导出。</p>
-            <p class="muted">后续可继续增加：番茄钟、论文项目、科研周报、云同步、AI总结等。</p>
+            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.1</h3></div></div>
+            <p class="muted">当前版本 V1.1：时间记录、实时计时器、自由标签、日历、备忘录、年度科研热力图、项目/论文统计、导入导出。</p>
+            <p class="muted">后续仍可继续增加：科研周报、目标管理、云同步、AI 总结等。</p>
           </div>
         </div>
       </section>
@@ -261,6 +343,11 @@
             <select id="activityCategory"></select>
           </div>
         </div>
+        <div class="form-group">
+          <label for="activityProject">项目 / 论文</label>
+          <input id="activityProject" list="projectDatalist" placeholder="可选，例如：Paper 1 / 冷板项目" />
+          <div class="field-help">用于按论文或项目统计投入时间；输入新名称后会自动加入项目列表。</div>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label for="activityStartTime">开始时间</label>
@@ -290,6 +377,8 @@
       </form>
     </div>
   </div>
+
+  <datalist id="projectDatalist"></datalist>
 
   <div class="toast" id="toast"></div>
 

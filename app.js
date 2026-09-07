@@ -9,7 +9,9 @@ const state = {
   calendarCursor: startOfMonth(new Date()),
   selectedCalendarDate: toDateKey(new Date()),
   editingMemoId: null,
-  statsRange: { type: '7', start: null, end: null }
+  statsRange: { type: '7', start: null, end: null },
+  heatmapYear: new Date().getFullYear(),
+  timerInterval: null
 };
 
 const els = {};
@@ -20,7 +22,10 @@ function init() {
   bindEvents();
   ensureDefaults();
   populateCategorySelect();
+  populateTimerCategorySelect();
+  populateProjectDatalist();
   renderAll();
+  startTimerTicker();
 }
 
 function cacheElements() {
@@ -39,6 +44,12 @@ function bindEvents() {
     openActivityModal({ title: btn.dataset.quickTitle, category: btn.dataset.quickCategory, date: state.selectedDate });
   }));
 
+  els.timerStartBtn.addEventListener('click', startTimer);
+  els.timerPauseBtn.addEventListener('click', pauseTimer);
+  els.timerResumeBtn.addEventListener('click', resumeTimer);
+  els.timerStopBtn.addEventListener('click', stopTimerAndSave);
+  els.timerCancelBtn.addEventListener('click', cancelTimer);
+
   els.prevMonthBtn.addEventListener('click', () => { state.calendarCursor = addMonths(state.calendarCursor, -1); renderCalendar(); });
   els.nextMonthBtn.addEventListener('click', () => { state.calendarCursor = addMonths(state.calendarCursor, 1); renderCalendar(); });
   els.calendarTodayBtn.addEventListener('click', () => {
@@ -52,6 +63,11 @@ function bindEvents() {
   document.querySelectorAll('.range-btn').forEach(btn => btn.addEventListener('click', () => setStatsRange(btn.dataset.range)));
   els.applyCustomRangeBtn.addEventListener('click', applyCustomStatsRange);
 
+  els.heatmapPrevYearBtn.addEventListener('click', () => { state.heatmapYear -= 1; renderResearchHeatmap(); });
+  els.heatmapNextYearBtn.addEventListener('click', () => {
+    if (state.heatmapYear < new Date().getFullYear()) { state.heatmapYear += 1; renderResearchHeatmap(); }
+  });
+
   els.newMemoBtn.addEventListener('click', newMemo);
   els.saveMemoBtn.addEventListener('click', saveMemo);
   els.deleteMemoBtn.addEventListener('click', deleteMemo);
@@ -60,6 +76,8 @@ function bindEvents() {
   els.importInput.addEventListener('change', importData);
   els.addCategoryBtn.addEventListener('click', addCategory);
   els.newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
+  els.addProjectBtn.addEventListener('click', addProject);
+  els.newProjectInput.addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
   els.closeActivityModalBtn.addEventListener('click', closeActivityModal);
@@ -75,16 +93,21 @@ function ensureDefaults() {
   if (!Array.isArray(state.data.activities)) state.data.activities = [];
   if (!Array.isArray(state.data.memos)) state.data.memos = [];
   if (!state.data.dayMemos) state.data.dayMemos = {};
+  if (!Array.isArray(state.data.projects)) state.data.projects = [];
+  state.data.activities.forEach(a => {
+    if (a.project && !state.data.projects.includes(a.project)) state.data.projects.push(a.project);
+  });
+  if (!state.data.timer || typeof state.data.timer !== 'object') state.data.timer = { active: false };
   saveData();
 }
 
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {} };
+    if (!raw) return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
     return JSON.parse(raw);
   } catch {
-    return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {} };
+    return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
   }
 }
 function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data)); }
@@ -95,6 +118,10 @@ function renderAll() {
   renderStats();
   renderMemoList();
   renderCategoryManager();
+  renderProjectManager();
+  populateProjectDatalist();
+  populateTimerCategorySelect();
+  renderTimer();
   renderPageMeta();
 }
 
@@ -147,6 +174,7 @@ function renderToday() {
         <h4>${escapeHtml(a.title)}</h4>
         <div class="timeline-meta">
           <span class="category-pill">${escapeHtml(a.category)}</span>
+          ${a.project ? `<span class="project-pill">📄 ${escapeHtml(a.project)}</span>` : ''}
           ${(a.tags || []).map(t => `<span class="tag-pill">#${escapeHtml(t)}</span>`).join('')}
         </div>
         ${a.note ? `<div class="timeline-note">${escapeHtml(a.note)}</div>` : ''}
@@ -197,7 +225,7 @@ function renderSelectedDayPanel() {
     <div class="mini-stat"><span>记录数</span><strong>${acts.length}</strong></div>`;
   els.selectedDayActivities.innerHTML = acts.length ? acts.map(a => `
     <button class="compact-item" data-activity-id="${a.id}">
-      <strong>${escapeHtml(a.title)}</strong><span>${a.startTime}–${a.endTime} · ${escapeHtml(a.category)}</span>
+      <strong>${escapeHtml(a.title)}</strong><span>${a.startTime}–${a.endTime} · ${escapeHtml(a.category)}${a.project ? ` · ${escapeHtml(a.project)}` : ''}</span>
     </button>`).join('') : '<div class="empty-state">当天暂无记录</div>';
   els.selectedDayActivities.querySelectorAll('[data-activity-id]').forEach(btn => btn.addEventListener('click', () => openActivityModalById(btn.dataset.activityId)));
   els.selectedDayMemo.value = state.data.dayMemos[key] || '';
@@ -262,6 +290,9 @@ function renderStats() {
 
   const tags = groupByTag(activities).slice(0, 30);
   els.tagStats.innerHTML = tags.length ? tags.map(t => `<div class="tag-stat"><strong>#${escapeHtml(t.name)}</strong><span>${formatMinutes(t.minutes)}</span></div>`).join('') : '<div class="empty-state">暂无标签数据</div>';
+
+  renderProjectStats(activities);
+  renderResearchHeatmap();
 
   const visibleSeries = daily.length > 60 ? aggregateSeries(daily, 7) : daily;
   const max = Math.max(1, ...visibleSeries.map(d=>d.minutes));
@@ -350,6 +381,7 @@ function openActivityModal(prefill={}) {
   els.activityTitle.value = prefill.title || '';
   els.activityDate.value = date;
   els.activityCategory.value = prefill.category || state.data.categories[0] || '科研';
+  els.activityProject.value = prefill.project || '';
   els.activityStartTime.value = toTimeValue(start);
   els.activityEndTime.value = toTimeValue(end);
   els.activityTags.value = prefill.tags || '';
@@ -368,6 +400,7 @@ function openActivityModalById(id) {
   els.activityTitle.value = a.title;
   els.activityDate.value = a.date;
   els.activityCategory.value = a.category;
+  els.activityProject.value = a.project || '';
   els.activityStartTime.value = a.startTime;
   els.activityEndTime.value = a.endTime;
   els.activityTags.value = (a.tags || []).join(', ');
@@ -390,6 +423,7 @@ function saveActivityFromForm(e) {
     startTime: start,
     endTime: end,
     category: els.activityCategory.value,
+    project: els.activityProject.value.trim(),
     tags: normalizeTags(els.activityTags.value),
     note: els.activityNote.value.trim(),
     createdAt: id ? (state.data.activities.find(x=>x.id===id)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -398,6 +432,7 @@ function saveActivityFromForm(e) {
   if (!item.title) return toast('请填写“做了什么”');
   if (id) state.data.activities = state.data.activities.map(a => a.id===id ? item : a);
   else state.data.activities.push(item);
+  if (item.project) ensureProject(item.project);
   saveData();
   state.selectedDate = item.date;
   state.selectedCalendarDate = item.date;
@@ -416,6 +451,19 @@ function populateCategorySelect() {
   const current = els.activityCategory?.value;
   els.activityCategory.innerHTML = state.data.categories.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
   if (current && state.data.categories.includes(current)) els.activityCategory.value = current;
+}
+
+function populateTimerCategorySelect() {
+  if (!els.timerCategory) return;
+  const current = els.timerCategory.value;
+  els.timerCategory.innerHTML = state.data.categories.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
+  if (current && state.data.categories.includes(current)) els.timerCategory.value = current;
+  else if (state.data.categories.includes('科研')) els.timerCategory.value = '科研';
+}
+
+function populateProjectDatalist() {
+  if (!els.projectDatalist) return;
+  els.projectDatalist.innerHTML = (state.data.projects || []).map(p=>`<option value="${escapeHtml(p)}"></option>`).join('');
 }
 
 function renderCategoryManager() {
@@ -438,9 +486,40 @@ function removeCategory(name) {
   saveData(); populateCategorySelect(); renderCategoryManager(); toast('类别已删除');
 }
 
+function renderProjectManager() {
+  if (!els.projectManager) return;
+  const projects = state.data.projects || [];
+  els.projectManager.innerHTML = projects.length
+    ? projects.map(p=>`<span class="category-token">${escapeHtml(p)}<button data-remove-project="${escapeHtml(p)}" title="删除">×</button></span>`).join('')
+    : '<span class="muted">还没有项目。添加后可在时间记录和计时器中直接选择。</span>';
+  els.projectManager.querySelectorAll('[data-remove-project]').forEach(btn => btn.addEventListener('click', () => removeProject(btn.dataset.removeProject)));
+}
+
+function addProject() {
+  const name = els.newProjectInput.value.trim();
+  if (!name) return;
+  if ((state.data.projects || []).includes(name)) return toast('这个项目已经存在');
+  state.data.projects.push(name);
+  els.newProjectInput.value = '';
+  saveData(); renderProjectManager(); populateProjectDatalist(); toast('项目已添加');
+}
+
+function ensureProject(name) {
+  name = (name || '').trim();
+  if (!name) return;
+  if (!state.data.projects.includes(name)) state.data.projects.push(name);
+}
+
+function removeProject(name) {
+  const count = state.data.activities.filter(a=>a.project===name).length;
+  if (count && !confirm(`已有 ${count} 条记录归属于“${name}”。从项目列表移除不会修改这些历史记录。继续吗？`)) return;
+  state.data.projects = state.data.projects.filter(p=>p!==name);
+  saveData(); renderProjectManager(); populateProjectDatalist(); toast('项目已从列表移除');
+}
+
 function exportData() {
   const payload = {
-    app: 'PhD Tracker', version: 1, exportedAt: new Date().toISOString(), data: state.data
+    app: 'PhD Tracker', version: 2, exportedAt: new Date().toISOString(), data: state.data
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -465,7 +544,9 @@ async function importData(e) {
     (incoming.memos || []).forEach(m=>memoMap.set(m.id || uid(),m));
     state.data.memos = [...memoMap.values()];
     state.data.categories = [...new Set([...(state.data.categories||[]), ...(incoming.categories||[])])];
+    state.data.projects = [...new Set([...(state.data.projects||[]), ...(incoming.projects||[]), ...(incoming.activities||[]).map(a=>a.project).filter(Boolean)])];
     state.data.dayMemos = { ...(state.data.dayMemos||{}), ...(incoming.dayMemos||{}) };
+    if (!state.data.timer?.active && incoming.timer?.active) state.data.timer = incoming.timer;
     saveData(); ensureDefaults(); renderAll(); toast('备份已成功导入并合并');
   } catch {
     alert('导入失败：文件格式不正确。请使用 PhD Tracker 导出的 JSON 备份文件。');
@@ -478,9 +559,250 @@ function clearAllData() {
   if (!confirm('确定清空全部本地数据吗？此操作无法撤销。')) return;
   if (!confirm('最后确认一次：所有时间记录、备忘录和设置都会被清空。')) return;
   localStorage.removeItem(STORAGE_KEY);
-  state.data = { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {} };
+  state.data = { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
   state.editingMemoId = null;
   saveData(); renderAll(); toast('全部数据已清空');
+}
+
+function startTimerTicker() {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    if (state.data.timer?.active && state.data.timer.running) updateTimerClockOnly();
+  }, 1000);
+}
+
+function getTimerElapsedSeconds(timer = state.data.timer) {
+  if (!timer?.active) return 0;
+  let seconds = Number(timer.accumulatedSeconds || 0);
+  if (timer.running && timer.segmentStartedAt) {
+    seconds += Math.max(0, (Date.now() - new Date(timer.segmentStartedAt).getTime()) / 1000);
+  }
+  return Math.floor(seconds);
+}
+
+function renderTimer() {
+  if (!els.timerDisplay) return;
+  const timer = state.data.timer || { active: false };
+  const active = !!timer.active;
+  const running = active && !!timer.running;
+  const paused = active && !timer.running;
+
+  els.timerDisplay.textContent = formatClock(getTimerElapsedSeconds(timer));
+  els.timerStatus.textContent = running ? '计时中' : paused ? '已暂停' : '未开始';
+  els.timerStatus.className = `timer-status ${running ? 'running' : paused ? 'paused' : ''}`;
+
+  if (active) {
+    els.timerTitle.value = timer.title || '';
+    els.timerCategory.value = timer.category || state.data.categories[0] || '科研';
+    els.timerProject.value = timer.project || '';
+    els.timerTags.value = (timer.tags || []).join(', ');
+    const start = timer.originalStartAt ? new Date(timer.originalStartAt) : null;
+    els.timerStartedAt.textContent = start ? `开始于 ${formatDateTime(timer.originalStartAt)} · 停止后自动写入时间轴` : '计时进行中';
+  } else {
+    els.timerStartedAt.textContent = '填写任务后点击开始，停止时会自动保存为时间记录。';
+  }
+
+  [els.timerTitle, els.timerCategory, els.timerProject, els.timerTags].forEach(el => { if (el) el.disabled = active; });
+  els.timerStartBtn.classList.toggle('hidden', active);
+  els.timerPauseBtn.classList.toggle('hidden', !running);
+  els.timerResumeBtn.classList.toggle('hidden', !paused);
+  els.timerStopBtn.classList.toggle('hidden', !active);
+  els.timerCancelBtn.classList.toggle('hidden', !active);
+}
+
+function updateTimerClockOnly() {
+  if (!els.timerDisplay) return;
+  els.timerDisplay.textContent = formatClock(getTimerElapsedSeconds());
+}
+
+function startTimer() {
+  const title = els.timerTitle.value.trim();
+  if (!title) return toast('请先填写正在做什么');
+  const now = new Date();
+  const project = els.timerProject.value.trim();
+  if (project) ensureProject(project);
+  state.data.timer = {
+    active: true,
+    running: true,
+    title,
+    category: els.timerCategory.value || '科研',
+    project,
+    tags: normalizeTags(els.timerTags.value),
+    originalStartAt: now.toISOString(),
+    segmentStartedAt: now.toISOString(),
+    accumulatedSeconds: 0
+  };
+  saveData(); populateProjectDatalist(); renderTimer(); toast('计时已开始');
+}
+
+function pauseTimer() {
+  const timer = state.data.timer;
+  if (!timer?.active || !timer.running) return;
+  timer.accumulatedSeconds = getTimerElapsedSeconds(timer);
+  timer.running = false;
+  timer.segmentStartedAt = null;
+  saveData(); renderTimer(); toast('计时已暂停');
+}
+
+function resumeTimer() {
+  const timer = state.data.timer;
+  if (!timer?.active || timer.running) return;
+  timer.running = true;
+  timer.segmentStartedAt = new Date().toISOString();
+  saveData(); renderTimer(); toast('继续计时');
+}
+
+function stopTimerAndSave() {
+  const timer = state.data.timer;
+  if (!timer?.active) return;
+  const elapsedSeconds = getTimerElapsedSeconds(timer);
+  const minutes = Math.max(1, Math.round(elapsedSeconds / 60));
+  if (elapsedSeconds < 30 && !confirm('本次计时不足 30 秒，仍然按 1 分钟保存吗？')) return;
+
+  const startDate = timer.originalStartAt ? new Date(timer.originalStartAt) : new Date();
+  const startMinute = startDate.getHours() * 60 + startDate.getMinutes();
+  let endMinute = startMinute + minutes;
+  let dateKey = toDateKey(startDate);
+  let note = '由实时计时器自动生成';
+  if (endMinute >= 24 * 60) {
+    endMinute = 23 * 60 + 59;
+    note += '；本次计时跨越午夜，时间轴显示已截到当天 23:59';
+  }
+  const item = {
+    id: uid(),
+    title: timer.title || '计时任务',
+    date: dateKey,
+    startTime: minutesToTime(startMinute),
+    endTime: minutesToTime(endMinute),
+    category: timer.category || '科研',
+    project: timer.project || '',
+    tags: timer.tags || [],
+    note,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  state.data.activities.push(item);
+  if (item.project) ensureProject(item.project);
+  state.data.timer = { active: false };
+  state.selectedDate = item.date;
+  state.selectedCalendarDate = item.date;
+  saveData();
+  clearTimerInputs();
+  renderAll();
+  toast(`已保存 ${formatMinutes(minutes)}`);
+}
+
+function cancelTimer() {
+  if (!state.data.timer?.active) return;
+  if (!confirm('确定放弃当前计时吗？这段时间不会保存到记录中。')) return;
+  state.data.timer = { active: false };
+  saveData(); clearTimerInputs(); renderTimer(); toast('本次计时已放弃');
+}
+
+function clearTimerInputs() {
+  if (!els.timerTitle) return;
+  els.timerTitle.value = '';
+  els.timerProject.value = '';
+  els.timerTags.value = '';
+  populateTimerCategorySelect();
+}
+
+function groupByProject(activities) {
+  const map = new Map();
+  activities.forEach(a => {
+    const project = (a.project || '').trim();
+    if (!project) return;
+    const current = map.get(project) || { name: project, minutes: 0, count: 0, lastDate: '' };
+    current.minutes += durationMinutes(a);
+    current.count += 1;
+    if (!current.lastDate || a.date > current.lastDate) current.lastDate = a.date;
+    map.set(project, current);
+  });
+  return [...map.values()].sort((a,b)=>b.minutes-a.minutes);
+}
+
+function renderProjectStats(activities) {
+  if (!els.projectStats) return;
+  const projects = groupByProject(activities);
+  const total = activities.reduce((s,a)=>s+durationMinutes(a),0) || 1;
+  if (!projects.length) {
+    els.projectStats.innerHTML = '<div class="empty-state project-empty">暂无项目/论文归属数据。编辑一条时间记录并填写“项目 / 论文”即可开始统计。</div>';
+    return;
+  }
+  els.projectStats.innerHTML = projects.slice(0, 20).map((p, index) => {
+    const pct = Math.round(p.minutes / total * 100);
+    return `<div class="project-stat-card">
+      <div class="project-stat-rank">${String(index+1).padStart(2,'0')}</div>
+      <div class="project-stat-main">
+        <strong>${escapeHtml(p.name)}</strong>
+        <span>${p.count} 条记录 · 最近 ${p.lastDate.slice(5)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,p.minutes/Math.max(...projects.map(x=>x.minutes))*100)}%"></div></div>
+      </div>
+      <div class="project-stat-time"><strong>${formatMinutes(p.minutes)}</strong><span>${pct}%</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderResearchHeatmap() {
+  if (!els.researchHeatmap) return;
+  const year = state.heatmapYear;
+  const currentYear = new Date().getFullYear();
+  els.heatmapYearLabel.textContent = `${year} 年`;
+  els.heatmapNextYearBtn.disabled = year >= currentYear;
+
+  const jan1 = new Date(year,0,1);
+  const dec31 = new Date(year,11,31);
+  const start = addDays(jan1, -((jan1.getDay()+6)%7));
+  const end = addDays(dec31, 6-((dec31.getDay()+6)%7));
+  const daily = new Map();
+  state.data.activities
+    .filter(a => a.category === '科研' && a.date.startsWith(`${year}-`))
+    .forEach(a => daily.set(a.date, (daily.get(a.date)||0) + durationMinutes(a)));
+
+  let html = '';
+  let totalMinutes = 0;
+  let activeDays = 0;
+  let streak = 0;
+  let longestStreak = 0;
+  const cells = [];
+  for (let d = new Date(start); d <= end; d = addDays(d,1)) {
+    const key = toDateKey(d);
+    const inYear = d.getFullYear() === year;
+    const minutes = inYear ? (daily.get(key) || 0) : 0;
+    if (inYear) {
+      totalMinutes += minutes;
+      if (minutes > 0) { activeDays += 1; streak += 1; longestStreak = Math.max(longestStreak, streak); }
+      else streak = 0;
+    }
+    const level = heatLevel(minutes);
+    const title = `${key} · ${minutes ? formatMinutes(minutes) : '无科研记录'}`;
+    cells.push(`<div class="heat-cell heat-${level} ${inYear?'':'heat-outside'}" title="${title}" aria-label="${title}"></div>`);
+  }
+  html = cells.join('');
+  els.researchHeatmap.innerHTML = html;
+
+  const weeks = Math.ceil(cells.length / 7);
+  els.researchHeatmap.style.gridTemplateColumns = `repeat(${weeks}, 12px)`;
+  const labels = Array(weeks).fill('');
+  for (let month=0; month<12; month++) {
+    const date = new Date(year, month, 1);
+    const weekIndex = Math.floor((date - start) / 86400000 / 7);
+    if (weekIndex >= 0 && weekIndex < weeks) labels[weekIndex] = `${month+1}月`;
+  }
+  els.heatmapMonths.style.gridTemplateColumns = `repeat(${weeks}, 12px)`;
+  els.heatmapMonths.innerHTML = labels.map(x=>`<span>${x}</span>`).join('');
+  els.heatmapSummary.innerHTML = `
+    <div class="heatmap-stat"><span>全年科研</span><strong>${formatMinutes(totalMinutes)}</strong></div>
+    <div class="heatmap-stat"><span>科研活跃天数</span><strong>${activeDays} 天</strong></div>
+    <div class="heatmap-stat"><span>最长连续投入</span><strong>${longestStreak} 天</strong></div>`;
+}
+
+function heatLevel(minutes) {
+  if (!minutes) return 0;
+  if (minutes < 60) return 1;
+  if (minutes < 180) return 2;
+  if (minutes < 360) return 3;
+  return 4;
 }
 
 function jumpToToday() {
@@ -525,6 +847,14 @@ function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate()+n); 
 function addMonths(date, n) { return new Date(date.getFullYear(),date.getMonth()+n,1); }
 function roundTime(date, step=5) { const d=new Date(date); d.setSeconds(0,0); d.setMinutes(Math.round(d.getMinutes()/step)*step); return d; }
 function toTimeValue(date) { return `${pad(date.getHours())}:${pad(date.getMinutes())}`; }
+function formatClock(seconds) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+function minutesToTime(min) { min = Math.max(0, Math.min(1439, Math.round(min))); return `${pad(Math.floor(min/60))}:${pad(min%60)}`; }
 function formatMinutes(min) { min = Math.round(min); const h=Math.floor(min/60), m=min%60; return h ? `${h}h ${pad(m)}m` : `${m}m`; }
 function formatFullDate(date) { return new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'long',day:'numeric',weekday:'long'}).format(date); }
 function formatDateTime(iso) { return new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(iso)); }
