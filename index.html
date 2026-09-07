@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
-  <title>PhD Tracker V1.2</title>
-  <link rel="stylesheet" href="style.css?v=1.2" />
-  <link rel="manifest" href="manifest.json?v=1.2" />
+  <title>PhD Tracker V1.3</title>
+  <link rel="stylesheet" href="style.css?v=1.3" />
+  <link rel="manifest" href="manifest.json?v=1.3" />
 </head>
 <body>
   <div class="app-shell">
@@ -15,7 +15,7 @@
         <div class="brand-mark">P</div>
         <div>
           <div class="brand-title">PhD Tracker</div>
-          <div class="brand-subtitle">Research Dashboard · V1.2</div>
+          <div class="brand-subtitle">Research Dashboard · V1.3</div>
         </div>
       </div>
 
@@ -28,7 +28,8 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="footer-note">数据默认保存在当前浏览器</div>
+        <div class="cloud-mini-status" id="cloudMiniStatus"><span class="cloud-dot local"></span><span>本地模式</span></div>
+        <div class="footer-note">V1.3 支持 Supabase 云同步；未登录时仍保存在本机。</div>
         <button class="secondary-btn full" id="quickExportBtn">导出备份</button>
       </div>
     </aside>
@@ -286,6 +287,66 @@
 
       <section class="page" id="page-settings">
         <div class="settings-grid">
+          <div class="card cloud-settings-card settings-wide">
+            <div class="section-heading-row">
+              <div><span class="eyebrow">Cloud Sync</span><h3>Supabase 多设备同步</h3></div>
+              <div class="cloud-badge local" id="cloudStatusBadge">本地模式</div>
+            </div>
+            <p class="muted">登录同一个账号后，电脑、手机和不同浏览器可以共享同一份 PhD Tracker 数据。本地缓存仍会保留。</p>
+
+            <div class="cloud-config-grid">
+              <div class="form-group">
+                <label for="supabaseUrlInput">Supabase Project URL</label>
+                <input id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" autocomplete="off" />
+              </div>
+              <div class="form-group">
+                <label for="supabaseKeyInput">Publishable / anon key</label>
+                <input id="supabaseKeyInput" placeholder="sb_publishable_... 或 anon key" autocomplete="off" />
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="secondary-btn" id="saveCloudConfigBtn">保存云端连接</button>
+              <button class="secondary-btn" id="testCloudConfigBtn">测试连接</button>
+            </div>
+
+            <div class="cloud-auth-panel" id="cloudLoggedOutPanel">
+              <div class="divider"></div>
+              <div class="cloud-auth-grid">
+                <div class="form-group">
+                  <label for="cloudEmailInput">邮箱</label>
+                  <input type="email" id="cloudEmailInput" placeholder="you@example.com" autocomplete="email" />
+                </div>
+                <div class="form-group">
+                  <label for="cloudPasswordInput">密码</label>
+                  <input type="password" id="cloudPasswordInput" placeholder="至少 6 位" autocomplete="current-password" />
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button class="primary-btn" id="cloudLoginBtn">登录并同步</button>
+                <button class="secondary-btn" id="cloudSignupBtn">注册账号</button>
+              </div>
+            </div>
+
+            <div class="cloud-auth-panel hidden" id="cloudLoggedInPanel">
+              <div class="divider"></div>
+              <div class="cloud-user-row">
+                <div>
+                  <span class="muted">当前云端账号</span>
+                  <strong id="cloudUserEmail">—</strong>
+                  <small id="cloudLastSyncText">尚未同步</small>
+                </div>
+                <button class="secondary-btn" id="cloudLogoutBtn">退出登录</button>
+              </div>
+              <div class="settings-actions cloud-sync-actions">
+                <button class="primary-btn" id="cloudSyncNowBtn">↻ 立即双向同步</button>
+                <button class="secondary-btn" id="cloudUploadBtn">上传本机数据</button>
+                <button class="secondary-btn" id="cloudDownloadBtn">下载云端数据</button>
+              </div>
+              <p class="field-help">正常使用时会自动同步。“上传本机数据”和“下载云端数据”仅用于手动覆盖恢复，点击前会再次确认。</p>
+            </div>
+            <div class="cloud-message" id="cloudMessage">尚未配置 Supabase。你仍可继续使用本地模式。</div>
+          </div>
+
           <div class="card">
             <div class="section-heading-row compact"><div><span class="eyebrow">Data</span><h3>数据备份</h3></div></div>
             <p class="muted">建议定期导出备份文件。导入会与当前数据合并。</p>
@@ -313,13 +374,13 @@
           </div>
           <div class="card danger-zone">
             <div class="section-heading-row compact"><div><span class="eyebrow">Danger Zone</span><h3>清空数据</h3></div></div>
-            <p class="muted">此操作不可撤销，建议先导出备份。</p>
-            <button class="danger-btn" id="clearAllBtn">清空全部本地数据</button>
+            <p class="muted">此操作不可撤销，建议先导出备份。已登录云端时，清空结果也会自动同步到云端。</p>
+            <button class="danger-btn" id="clearAllBtn">清空全部数据</button>
           </div>
           <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.1</h3></div></div>
-            <p class="muted">当前版本 V1.1：时间记录、实时计时器、自由标签、日历、备忘录、年度科研热力图、项目/论文统计、导入导出。</p>
-            <p class="muted">后续仍可继续增加：科研周报、目标管理、云同步、AI 总结等。</p>
+            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.3</h3></div></div>
+            <p class="muted">当前版本 V1.3：V1.2 全部功能 + Supabase 登录、云端备份与多设备自动同步。</p>
+            <p class="muted">云端不可用时自动回退到本地缓存；恢复网络后可继续同步。</p>
           </div>
         </div>
       </section>
@@ -390,6 +451,8 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=1.2"></script>
+  <script src="supabase-config.js?v=1.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js?v=1.3"></script>
 </body>
 </html>

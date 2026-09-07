@@ -1,0 +1,82 @@
+PhD Tracker V1.3 - Supabase 多设备同步配置
+==============================================
+
+目标
+----
+同一个 PhD Tracker GitHub Pages 网址，在电脑、手机、不同浏览器中登录同一个账号后，共享同一份时间记录、备忘录、项目和统计数据。
+
+一次性配置步骤
+--------------
+1. 打开 https://supabase.com 并登录，创建一个新 Project。
+
+2. 进入该 Project 的 SQL Editor，创建一个 New query。
+   打开本文件夹里的 supabase_setup.sql，把全部 SQL 粘贴进去并 Run。
+   成功后会创建 public.phd_tracker_state 表，并启用 RLS：每个登录用户只能读写自己的那一行数据。
+
+3. 获取 Project URL 和 Publishable key：
+   - 在 Supabase Project 顶部点击 Connect，可以看到 Project URL 和 Publishable key；
+   - 或进入 Settings > API Keys 查看 Publishable key。
+   推荐使用 sb_publishable_... 开头的 Publishable key。
+   不要把 Secret key / service_role key 放进网页！
+
+4. 配置认证网址（推荐）：
+   Supabase Dashboard > Authentication > URL Configuration
+   Site URL 填你的 GitHub Pages 地址，例如：
+   https://mings2026.github.io/phd-tracker/
+   如果你启用了 Confirm Email，注册确认邮件会用到这个网址。
+
+5. 将 V1.3 文件上传 GitHub，覆盖旧版本：
+   index.html
+   app.js
+   style.css
+   manifest.json
+   README.txt
+   supabase-config.js
+
+   supabase_setup.sql 和 SUPABASE_SETUP.txt 不影响网页运行，可上传也可不上传。
+
+6. 在网页里配置 Supabase，有两种方式：
+
+   方式 A（最省事，推荐）：
+   打开 PhD Tracker > 设置 > Supabase 多设备同步
+   填入 Project URL 和 Publishable key
+   点击“保存云端连接”。
+   每个新设备第一次使用时需要各填一次。
+
+   方式 B（让所有设备自动知道同一个 Supabase 项目）：
+   在 GitHub 中编辑 supabase-config.js，把：
+     url: ''
+     key: ''
+   分别改成你的 Project URL 和 Publishable key。
+   保存 Commit 后，所有设备打开网页都会自动读取该配置。
+   Publishable key 本来就是用于浏览器客户端的；但绝对不能填写 Secret/service_role key。
+
+7. 注册/登录：
+   PhD Tracker > 设置 > Supabase 多设备同步
+   输入邮箱和至少 6 位密码。
+   首台设备点击“注册账号”。如果 Supabase 开启了 Confirm Email，请先到邮箱点击确认链接。
+   然后点击“登录并同步”。
+
+8. 其他设备：
+   打开同一个 GitHub Pages 网址，使用同一个邮箱和密码登录。
+   页面会自动把本地数据与云端数据合并，并在之后自动同步。
+
+V1.2 数据迁移
+-------------
+V1.3 继续使用 localStorage 键 phdTrackerV1，所以同一浏览器直接升级时，V1.2 的本地数据会保留。
+首次登录 Supabase 后，如果云端还没有数据，V1.3 会自动把当前本机数据上传到云端。
+建议升级前仍先点击“导出全部数据”保存一份 JSON 备份。
+
+同步策略
+--------
+- 正常编辑、添加、删除记录后：约 1 秒内自动上传。
+- 登录、重新联网、切回页面、每隔约 60 秒：自动检查云端更新。
+- 活动和备忘录按 ID + 更新时间合并；删除操作保留删除标记，尽量避免另一台设备把已删除项目恢复回来。
+- 如果两台设备在同一时刻修改同一条记录，更新时间较新的版本优先。
+- 设置页仍提供“立即双向同步”“上传本机数据”“下载云端数据”三个手动按钮。
+
+安全说明
+--------
+- 浏览器中只使用 Publishable key（或旧版 anon key）。
+- 数据库开启 RLS，每个登录用户只能访问 user_id = auth.uid() 的数据。
+- 不要把 Supabase Secret key / service_role key 写入 GitHub、HTML、JS 或任何前端文件。

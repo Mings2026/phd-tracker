@@ -1,9 +1,9 @@
 {
-  "name": "PhD Tracker V1.2",
+  "name": "PhD Tracker V1.3",
   "short_name": "PhD Tracker",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f4f7fb",
   "theme_color": "#0f172a",
-  "description": "PhD Tracker V1.2：个人科研时间记录、实时计时、年度科研热力图、项目/论文统计、日历与备忘录"
+  "description": "PhD Tracker V1.3：个人科研时间记录、实时计时、年度科研热力图、项目/论文统计、日历、备忘录与 Supabase 多设备同步"
 }

@@ -1,5 +1,8 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
+const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
+const CLOUD_TABLE = 'phd_tracker_state';
+const CLOUD_SYNC_DELAY_MS = 900;
 const DEFAULT_CATEGORIES = ['科研', '学习', '会议', '生活', '运动', '娱乐'];
 const CATEGORY_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#ea580c', '#db2777', '#4f46e5', '#ca8a04'];
 
@@ -12,7 +15,16 @@ const state = {
   editingMemoId: null,
   statsRange: { type: '7', start: null, end: null },
   heatmapYear: new Date().getFullYear(),
-  timerInterval: null
+  timerInterval: null,
+  cloud: {
+    client: null,
+    user: null,
+    syncTimer: null,
+    syncing: false,
+    lastRemoteUpdatedAt: null,
+    authSubscription: null,
+    pollInterval: null
+  }
 };
 
 const els = {};
@@ -27,6 +39,7 @@ function init() {
   populateProjectDatalist();
   renderAll();
   startTimerTicker();
+  initCloud().catch(err => { console.error(err); setCloudMessage('云同步初始化失败，当前继续使用本地模式。', 'error'); });
 }
 
 function cacheElements() {
@@ -81,6 +94,19 @@ function bindEvents() {
   els.newProjectInput.addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
+  // V1.3 Supabase cloud sync
+  els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
+  els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
+  els.cloudLoginBtn?.addEventListener('click', cloudLogin);
+  els.cloudSignupBtn?.addEventListener('click', cloudSignup);
+  els.cloudLogoutBtn?.addEventListener('click', cloudLogout);
+  els.cloudSyncNowBtn?.addEventListener('click', () => syncCloudBidirectional({ manual: true }));
+  els.cloudUploadBtn?.addEventListener('click', forceUploadLocalToCloud);
+  els.cloudDownloadBtn?.addEventListener('click', forceDownloadCloudToLocal);
+  window.addEventListener('online', () => { renderCloudUI(); if (state.cloud.user) syncCloudBidirectional({ silent: true }); });
+  window.addEventListener('offline', renderCloudUI);
+  window.addEventListener('focus', () => { if (state.cloud.user) pullCloudIfNewer(); });
+
   els.closeActivityModalBtn.addEventListener('click', closeActivityModal);
   els.cancelActivityBtn.addEventListener('click', closeActivityModal);
   els.activityModalBackdrop.addEventListener('click', e => { if (e.target === els.activityModalBackdrop) closeActivityModal(); });
@@ -90,7 +116,7 @@ function bindEvents() {
 }
 
 function ensureDefaults() {
-  // V1.2: tolerate older/local data shapes and always keep category selectors usable.
+  // V1.3: tolerate older/local data shapes and always keep category selectors usable.
   const rawCategories = Array.isArray(state.data.categories) ? state.data.categories : [];
   const normalizedCategories = rawCategories
     .map(c => typeof c === 'string' ? c.trim() : (c && typeof c.name === 'string' ? c.name.trim() : ''))
@@ -108,19 +134,39 @@ function ensureDefaults() {
     if (a.project && !state.data.projects.includes(a.project)) state.data.projects.push(a.project);
   });
   if (!state.data.timer || typeof state.data.timer !== 'object') state.data.timer = { active: false };
-  saveData();
+  if (!state.data.meta || typeof state.data.meta !== 'object') state.data.meta = {};
+  if (!state.data.meta.updatedAt) state.data.meta.updatedAt = new Date().toISOString();
+  if (!Array.isArray(state.data.deletedActivities)) state.data.deletedActivities = [];
+  if (!Array.isArray(state.data.deletedMemos)) state.data.deletedMemos = [];
+  if (!state.data.dayMemoUpdatedAt || typeof state.data.dayMemoUpdatedAt !== 'object') state.data.dayMemoUpdatedAt = {};
+  persistLocal(false, false);
+}
+
+function emptyData() {
+  return {
+    activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [],
+    timer: { active: false }, meta: { updatedAt: new Date().toISOString() },
+    deletedActivities: [], deletedMemos: [], dayMemoUpdatedAt: {}
+  };
 }
 
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
+    if (!raw) return emptyData();
     return JSON.parse(raw);
   } catch {
-    return { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
+    return emptyData();
   }
 }
-function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data)); }
+function persistLocal(touch = true, sync = true) {
+  if (!state.data.meta || typeof state.data.meta !== 'object') state.data.meta = {};
+  if (touch) state.data.meta.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+  if (sync) scheduleCloudSync();
+  renderCloudUI();
+}
+function saveData() { persistLocal(true, true); }
 
 function renderAll() {
   renderToday();
@@ -132,6 +178,7 @@ function renderAll() {
   populateProjectDatalist();
   populateTimerCategorySelect();
   renderTimer();
+  renderCloudUI();
   renderPageMeta();
 }
 
@@ -152,7 +199,7 @@ function renderPageMeta() {
     calendar: ['日历', '按天查看你的时间投入与备忘'],
     stats: ['统计', '看看时间真正花在了哪里'],
     memo: ['备忘录', '记录科研想法、待办与灵感'],
-    settings: ['设置', '管理类别、备份与本地数据']
+    settings: ['设置', '管理云同步、类别与数据备份']
   };
   els.pageTitle.textContent = map[state.currentPage][0];
   els.pageSubtitle.textContent = map[state.currentPage][1];
@@ -243,6 +290,7 @@ function renderSelectedDayPanel() {
 
 function saveDayMemo() {
   state.data.dayMemos[state.selectedCalendarDate] = els.selectedDayMemo.value.trim();
+  state.data.dayMemoUpdatedAt[state.selectedCalendarDate] = new Date().toISOString();
   saveData();
   toast('当天备忘已保存');
 }
@@ -366,6 +414,7 @@ function saveMemo() {
   memo.title = els.memoTitleInput.value.trim() || '未命名备忘录';
   memo.content = els.memoContentInput.value;
   memo.updatedAt = new Date().toISOString();
+  state.data.deletedMemos = (state.data.deletedMemos || []).filter(t => t.id !== memo.id);
   saveData(); renderMemoList(); toast('备忘录已保存');
 }
 function deleteMemo() {
@@ -373,6 +422,7 @@ function deleteMemo() {
   const memo = state.data.memos.find(m=>m.id===state.editingMemoId);
   if (!memo || !confirm(`确定删除“${memo.title || '未命名备忘录'}”吗？`)) return;
   state.data.memos = state.data.memos.filter(m=>m.id!==state.editingMemoId);
+  state.data.deletedMemos = upsertTombstone(state.data.deletedMemos, state.editingMemoId);
   state.editingMemoId = null;
   saveData(); renderMemoList(); toast('备忘录已删除');
 }
@@ -442,6 +492,7 @@ function saveActivityFromForm(e) {
   if (!item.title) return toast('请填写“做了什么”');
   if (id) state.data.activities = state.data.activities.map(a => a.id===id ? item : a);
   else state.data.activities.push(item);
+  state.data.deletedActivities = (state.data.deletedActivities || []).filter(t => t.id !== item.id);
   if (item.project) ensureProject(item.project);
   saveData();
   state.selectedDate = item.date;
@@ -454,6 +505,7 @@ function deleteCurrentActivity() {
   const a = state.data.activities.find(x=>x.id===id);
   if (!a || !confirm(`确定删除“${a.title}”吗？`)) return;
   state.data.activities = state.data.activities.filter(x=>x.id!==id);
+  state.data.deletedActivities = upsertTombstone(state.data.deletedActivities, id);
   saveData(); closeActivityModal(); renderAll(); toast('记录已删除');
 }
 
@@ -552,18 +604,9 @@ async function importData(e) {
     const parsed = JSON.parse(await file.text());
     const incoming = parsed.data || parsed;
     if (!incoming || !Array.isArray(incoming.activities)) throw new Error('invalid');
-    const byId = new Map(state.data.activities.map(a=>[a.id,a]));
-    incoming.activities.forEach(a=>byId.set(a.id || uid(), a));
-    state.data.activities = [...byId.values()];
-
-    const memoMap = new Map(state.data.memos.map(m=>[m.id,m]));
-    (incoming.memos || []).forEach(m=>memoMap.set(m.id || uid(),m));
-    state.data.memos = [...memoMap.values()];
-    state.data.categories = [...new Set([...(state.data.categories||[]), ...(incoming.categories||[])])];
-    state.data.projects = [...new Set([...(state.data.projects||[]), ...(incoming.projects||[]), ...(incoming.activities||[]).map(a=>a.project).filter(Boolean)])];
-    state.data.dayMemos = { ...(state.data.dayMemos||{}), ...(incoming.dayMemos||{}) };
-    if (!state.data.timer?.active && incoming.timer?.active) state.data.timer = incoming.timer;
-    saveData(); ensureDefaults(); renderAll(); toast('备份已成功导入并合并');
+    state.data = mergeDataStates(state.data, incoming);
+    ensureDefaults();
+    saveData(); renderAll(); toast('备份已成功导入并合并');
   } catch {
     alert('导入失败：文件格式不正确。请使用 PhD Tracker 导出的 JSON 备份文件。');
   } finally {
@@ -575,9 +618,9 @@ function clearAllData() {
   if (!confirm('确定清空全部本地数据吗？此操作无法撤销。')) return;
   if (!confirm('最后确认一次：所有时间记录、备忘录和设置都会被清空。')) return;
   localStorage.removeItem(STORAGE_KEY);
-  state.data = { activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], timer: { active: false } };
+  state.data = emptyData();
   state.editingMemoId = null;
-  saveData(); renderAll(); toast('全部数据已清空');
+  saveData(); renderAll(); toast(state.cloud.user ? '全部数据已清空，并将同步到云端' : '全部本地数据已清空');
 }
 
 function startTimerTicker() {
@@ -632,7 +675,7 @@ function updateTimerClockOnly() {
 }
 
 function startTimer() {
-  // V1.2: the button must always be actionable. If the task title is blank,
+  // V1.3: the button must always be actionable. If the task title is blank,
   // use the selected category as a sensible temporary title instead of blocking.
   populateTimerCategorySelect();
   const category = (els.timerCategory?.value || '科研').trim() || '科研';
@@ -727,6 +770,438 @@ function clearTimerInputs() {
   els.timerProject.value = '';
   els.timerTags.value = '';
   populateTimerCategorySelect();
+}
+
+
+// ------------------------------
+// V1.3 Supabase cloud sync
+// ------------------------------
+function validCloudConfig(config) {
+  return !!(config && typeof config.url === 'string' && /^https:\/\//.test(config.url.trim()) && typeof config.key === 'string' && config.key.trim().length > 20);
+}
+
+function getCloudConfig() {
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || 'null'); } catch {}
+  const bundled = window.PHD_TRACKER_SUPABASE || null;
+  if (validCloudConfig(stored)) return { url: stored.url.trim(), key: stored.key.trim(), source: 'browser' };
+  if (validCloudConfig(bundled)) return { url: bundled.url.trim(), key: bundled.key.trim(), source: 'file' };
+  return { url: stored?.url || bundled?.url || '', key: stored?.key || bundled?.key || '', source: 'none' };
+}
+
+function setCloudMessage(message, type = '') {
+  if (!els.cloudMessage) return;
+  els.cloudMessage.textContent = message;
+  els.cloudMessage.className = `cloud-message ${type}`;
+}
+
+function cloudStatusLabel() {
+  if (!navigator.onLine) return ['离线 · 本地缓存', 'offline'];
+  if (!state.cloud.client) return ['本地模式', 'local'];
+  if (state.cloud.syncing) return ['正在同步…', 'syncing'];
+  if (state.cloud.user) return ['云端已连接', 'online'];
+  return ['云端未登录', 'ready'];
+}
+
+function renderCloudUI() {
+  const [label, mode] = cloudStatusLabel();
+  if (els.cloudStatusBadge) {
+    els.cloudStatusBadge.textContent = label;
+    els.cloudStatusBadge.className = `cloud-badge ${mode}`;
+  }
+  if (els.cloudMiniStatus) {
+    els.cloudMiniStatus.innerHTML = `<span class="cloud-dot ${mode}"></span><span>${escapeHtml(label)}</span>`;
+  }
+  if (els.cloudLoggedOutPanel) els.cloudLoggedOutPanel.classList.toggle('hidden', !!state.cloud.user);
+  if (els.cloudLoggedInPanel) els.cloudLoggedInPanel.classList.toggle('hidden', !state.cloud.user);
+  if (els.cloudUserEmail) els.cloudUserEmail.textContent = state.cloud.user?.email || '—';
+  if (els.cloudLastSyncText) {
+    const iso = state.data?.meta?.lastCloudSyncedAt;
+    els.cloudLastSyncText.textContent = iso ? `上次同步：${formatDateTime(iso)}` : '尚未完成云端同步';
+  }
+}
+
+function fillCloudConfigInputs() {
+  const config = getCloudConfig();
+  if (els.supabaseUrlInput && !els.supabaseUrlInput.value) els.supabaseUrlInput.value = config.url || '';
+  if (els.supabaseKeyInput && !els.supabaseKeyInput.value) els.supabaseKeyInput.value = config.key || '';
+}
+
+async function initCloud() {
+  fillCloudConfigInputs();
+  const config = getCloudConfig();
+  if (!validCloudConfig(config)) {
+    renderCloudUI();
+    setCloudMessage('尚未配置 Supabase。进入“设置 → Supabase 多设备同步”填入 Project URL 和 Publishable key 即可启用。');
+    return;
+  }
+  await createCloudClient(config);
+}
+
+async function createCloudClient(config) {
+  if (!validCloudConfig(config)) throw new Error('Supabase 配置不完整');
+  if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
+
+  if (state.cloud.authSubscription?.unsubscribe) state.cloud.authSubscription.unsubscribe();
+  if (state.cloud.pollInterval) clearInterval(state.cloud.pollInterval);
+
+  state.cloud.client = window.supabase.createClient(config.url, config.key, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  renderCloudUI();
+  setCloudMessage('Supabase 已配置。正在检查登录状态…');
+
+  const { data, error } = await state.cloud.client.auth.getSession();
+  if (error) throw error;
+  state.cloud.user = data.session?.user || null;
+
+  const sub = state.cloud.client.auth.onAuthStateChange((event, session) => {
+    state.cloud.user = session?.user || null;
+    renderCloudUI();
+    if (event === 'SIGNED_IN' && state.cloud.user) {
+      setTimeout(() => syncCloudBidirectional({ silent: true }), 0);
+    }
+    if (event === 'SIGNED_OUT') {
+      setCloudMessage('已退出云端账号。当前数据仍保存在本机。');
+    }
+  });
+  state.cloud.authSubscription = sub.data?.subscription || null;
+
+  if (state.cloud.user) {
+    setCloudMessage(`已登录 ${state.cloud.user.email || ''}，正在同步…`);
+    await syncCloudBidirectional({ silent: true });
+  } else {
+    setCloudMessage('Supabase 连接正常。登录或注册后即可在不同设备共享数据。', 'success');
+  }
+
+  state.cloud.pollInterval = setInterval(() => {
+    if (state.cloud.user && navigator.onLine && !document.hidden) pullCloudIfNewer();
+  }, 60000);
+  renderCloudUI();
+}
+
+async function saveCloudConfigFromUI() {
+  const config = {
+    url: (els.supabaseUrlInput?.value || '').trim(),
+    key: (els.supabaseKeyInput?.value || '').trim()
+  };
+  if (!validCloudConfig(config)) return toast('请填写正确的 Project URL 和 Publishable key');
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(config));
+  try {
+    await createCloudClient(config);
+    toast('Supabase 连接已保存');
+  } catch (err) {
+    console.error(err);
+    state.cloud.client = null;
+    state.cloud.user = null;
+    renderCloudUI();
+    setCloudMessage(`连接失败：${friendlyCloudError(err)}`, 'error');
+  }
+}
+
+async function testCloudConnection() {
+  const config = {
+    url: (els.supabaseUrlInput?.value || '').trim(),
+    key: (els.supabaseKeyInput?.value || '').trim()
+  };
+  if (!validCloudConfig(config)) return toast('请先填写 Supabase Project URL 和 Publishable key');
+  try {
+    setCloudMessage('正在测试 Supabase 连接…');
+    if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本未加载');
+    const temp = window.supabase.createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await temp.auth.getSession();
+    if (error) throw error;
+    setCloudMessage('连接测试成功。保存连接后即可登录。', 'success');
+    toast('Supabase 连接正常');
+  } catch (err) {
+    setCloudMessage(`连接测试失败：${friendlyCloudError(err)}`, 'error');
+  }
+}
+
+async function ensureCloudClient() {
+  if (state.cloud.client) return true;
+  const config = getCloudConfig();
+  if (!validCloudConfig(config)) {
+    setCloudMessage('请先填写并保存 Supabase Project URL 和 Publishable key。', 'error');
+    return false;
+  }
+  try { await createCloudClient(config); return !!state.cloud.client; }
+  catch (err) { setCloudMessage(`连接失败：${friendlyCloudError(err)}`, 'error'); return false; }
+}
+
+async function cloudSignup() {
+  if (!await ensureCloudClient()) return;
+  const email = (els.cloudEmailInput?.value || '').trim();
+  const password = els.cloudPasswordInput?.value || '';
+  if (!email || password.length < 6) return toast('请输入邮箱和至少 6 位密码');
+  try {
+    setCloudMessage('正在创建账号…');
+    const { data, error } = await state.cloud.client.auth.signUp({
+      email, password,
+      options: { emailRedirectTo: window.location.origin + window.location.pathname }
+    });
+    if (error) throw error;
+    if (data.session) {
+      state.cloud.user = data.user;
+      renderCloudUI();
+      await syncCloudBidirectional({ silent: true });
+      setCloudMessage('注册并登录成功，数据已开始云同步。', 'success');
+    } else {
+      setCloudMessage('注册成功。请到邮箱点击 Supabase 的确认链接，然后回到本页登录。', 'success');
+    }
+  } catch (err) {
+    setCloudMessage(`注册失败：${friendlyCloudError(err)}`, 'error');
+  }
+}
+
+async function cloudLogin() {
+  if (!await ensureCloudClient()) return;
+  const email = (els.cloudEmailInput?.value || '').trim();
+  const password = els.cloudPasswordInput?.value || '';
+  if (!email || !password) return toast('请输入邮箱和密码');
+  try {
+    setCloudMessage('正在登录…');
+    const { data, error } = await state.cloud.client.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    state.cloud.user = data.user;
+    renderCloudUI();
+    await syncCloudBidirectional({ manual: true });
+  } catch (err) {
+    setCloudMessage(`登录失败：${friendlyCloudError(err)}`, 'error');
+  }
+}
+
+async function cloudLogout() {
+  if (!state.cloud.client) return;
+  try {
+    await state.cloud.client.auth.signOut();
+    state.cloud.user = null;
+    renderCloudUI();
+    setCloudMessage('已退出登录。当前设备仍保留一份本地缓存。');
+  } catch (err) { setCloudMessage(`退出失败：${friendlyCloudError(err)}`, 'error'); }
+}
+
+function scheduleCloudSync() {
+  if (!state?.cloud?.user || !state.cloud.client || !navigator.onLine) return;
+  clearTimeout(state.cloud.syncTimer);
+  state.cloud.syncTimer = setTimeout(() => pushLocalToCloud({ silent: true }), CLOUD_SYNC_DELAY_MS);
+}
+
+async function getCloudRow() {
+  if (!state.cloud.client || !state.cloud.user) return null;
+  const { data, error } = await state.cloud.client
+    .from(CLOUD_TABLE)
+    .select('data,updated_at')
+    .eq('user_id', state.cloud.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function pushLocalToCloud({ silent = false } = {}) {
+  if (!state.cloud.client || !state.cloud.user || !navigator.onLine) return false;
+  if (state.cloud.syncing) return false;
+  state.cloud.syncing = true;
+  renderCloudUI();
+  try {
+    const now = new Date().toISOString();
+    if (!state.data.meta) state.data.meta = {};
+    if (!state.data.meta.updatedAt) state.data.meta.updatedAt = now;
+    const { data, error } = await state.cloud.client
+      .from(CLOUD_TABLE)
+      .upsert({ user_id: state.cloud.user.id, data: state.data, updated_at: now }, { onConflict: 'user_id' })
+      .select('updated_at')
+      .single();
+    if (error) throw error;
+    state.cloud.lastRemoteUpdatedAt = data.updated_at;
+    state.data.meta.lastCloudSyncedAt = new Date().toISOString();
+    persistLocal(false, false);
+    if (!silent) toast('已同步到 Supabase');
+    setCloudMessage('云端同步正常。之后的记录会自动同步。', 'success');
+    return true;
+  } catch (err) {
+    console.error(err);
+    setCloudMessage(`同步失败：${friendlyCloudError(err)}。本地数据仍安全保留。`, 'error');
+    return false;
+  } finally {
+    state.cloud.syncing = false;
+    renderCloudUI();
+  }
+}
+
+async function syncCloudBidirectional({ manual = false, silent = false } = {}) {
+  if (!state.cloud.client || !state.cloud.user || !navigator.onLine) {
+    if (manual) toast('当前未连接云端或网络离线');
+    return;
+  }
+  if (state.cloud.syncing) return;
+  state.cloud.syncing = true;
+  renderCloudUI();
+  try {
+    const row = await getCloudRow();
+    if (!row) {
+      state.cloud.syncing = false;
+      await pushLocalToCloud({ silent });
+      setCloudMessage('云端首次初始化完成：已上传当前设备数据。', 'success');
+      return;
+    }
+    const remote = (row.data && typeof row.data === 'object') ? row.data : emptyData();
+    if (!remote.meta || typeof remote.meta !== 'object') remote.meta = {};
+    if (!remote.meta.updatedAt) remote.meta.updatedAt = row.updated_at;
+    state.data = mergeDataStates(state.data, remote);
+    ensureDefaults();
+    state.data.meta.updatedAt = new Date().toISOString();
+    persistLocal(false, false);
+    renderAll();
+    state.cloud.lastRemoteUpdatedAt = row.updated_at;
+    state.cloud.syncing = false;
+    await pushLocalToCloud({ silent: true });
+    if (manual && !silent) toast('双向同步完成');
+    setCloudMessage('双向同步完成。此设备与云端数据已合并。', 'success');
+  } catch (err) {
+    console.error(err);
+    setCloudMessage(`同步失败：${friendlyCloudError(err)}。本地数据未丢失。`, 'error');
+  } finally {
+    state.cloud.syncing = false;
+    renderCloudUI();
+  }
+}
+
+async function pullCloudIfNewer() {
+  if (!state.cloud.client || !state.cloud.user || !navigator.onLine || state.cloud.syncing) return;
+  try {
+    const row = await getCloudRow();
+    if (!row) return;
+    const known = state.cloud.lastRemoteUpdatedAt ? new Date(state.cloud.lastRemoteUpdatedAt).getTime() : 0;
+    const remoteTime = new Date(row.updated_at).getTime();
+    if (remoteTime > known + 1000) await syncCloudBidirectional({ silent: true });
+  } catch (err) { console.warn('Cloud refresh skipped:', err); }
+}
+
+async function forceUploadLocalToCloud() {
+  if (!state.cloud.user) return toast('请先登录云端账号');
+  if (!confirm('确定用当前设备的数据覆盖云端数据吗？其他设备下次同步后会以这份数据为准。')) return;
+  await pushLocalToCloud({ silent: false });
+}
+
+async function forceDownloadCloudToLocal() {
+  if (!state.cloud.user) return toast('请先登录云端账号');
+  if (!confirm('确定用云端数据覆盖当前设备的本地数据吗？建议先导出 JSON 备份。')) return;
+  try {
+    state.cloud.syncing = true; renderCloudUI();
+    const row = await getCloudRow();
+    if (!row) throw new Error('云端还没有数据');
+    state.data = deepClone(row.data || emptyData());
+    ensureDefaults();
+    state.cloud.lastRemoteUpdatedAt = row.updated_at;
+    state.data.meta.lastCloudSyncedAt = new Date().toISOString();
+    persistLocal(false, false);
+    renderAll();
+    toast('已下载云端数据');
+    setCloudMessage('已使用云端数据覆盖本机缓存。', 'success');
+  } catch (err) {
+    setCloudMessage(`下载失败：${friendlyCloudError(err)}`, 'error');
+  } finally { state.cloud.syncing = false; renderCloudUI(); }
+}
+
+function mergeDataStates(localData, remoteData) {
+  const local = deepClone(localData || emptyData());
+  const remote = deepClone(remoteData || emptyData());
+  const lMeta = local.meta || {};
+  const rMeta = remote.meta || {};
+  const lTime = isoTime(lMeta.updatedAt);
+  const rTime = isoTime(rMeta.updatedAt);
+  const newer = lTime >= rTime ? local : remote;
+
+  const deletedActivities = mergeTombstones(local.deletedActivities, remote.deletedActivities);
+  const deletedMemos = mergeTombstones(local.deletedMemos, remote.deletedMemos);
+  const activities = mergeEntities(local.activities, remote.activities, deletedActivities);
+  const memos = mergeEntities(local.memos, remote.memos, deletedMemos);
+  const dayMemoMerged = mergeDayMemos(local, remote);
+
+  const projectsUsed = activities.map(a => a.project).filter(Boolean);
+  const categoriesUsed = activities.map(a => a.category).filter(Boolean);
+  return {
+    activities,
+    memos,
+    categories: [...new Set([...(newer.categories || DEFAULT_CATEGORIES), ...categoriesUsed])],
+    projects: [...new Set([...(newer.projects || []), ...projectsUsed])],
+    dayMemos: dayMemoMerged.values,
+    dayMemoUpdatedAt: dayMemoMerged.timestamps,
+    timer: deepClone(newer.timer || { active: false }),
+    deletedActivities,
+    deletedMemos,
+    meta: {
+      ...deepClone(newer.meta || {}),
+      updatedAt: new Date(Math.max(lTime || 0, rTime || 0, Date.now())).toISOString()
+    }
+  };
+}
+
+function mergeEntities(a = [], b = [], tombstones = []) {
+  const map = new Map();
+  [...(a || []), ...(b || [])].forEach(item => {
+    if (!item || !item.id) return;
+    const prev = map.get(item.id);
+    if (!prev || isoTime(item.updatedAt || item.createdAt) >= isoTime(prev.updatedAt || prev.createdAt)) map.set(item.id, item);
+  });
+  const tombMap = new Map((tombstones || []).map(t => [t.id, isoTime(t.deletedAt)]));
+  return [...map.values()].filter(item => (tombMap.get(item.id) || 0) < isoTime(item.updatedAt || item.createdAt));
+}
+
+function upsertTombstone(list = [], id) {
+  if (!id) return list || [];
+  const now = new Date().toISOString();
+  const map = new Map((list || []).filter(Boolean).map(t => [t.id, t]));
+  map.set(id, { id, deletedAt: now });
+  return [...map.values()];
+}
+
+function mergeTombstones(a = [], b = []) {
+  const map = new Map();
+  [...(a || []), ...(b || [])].forEach(t => {
+    if (!t?.id) return;
+    const prev = map.get(t.id);
+    if (!prev || isoTime(t.deletedAt) > isoTime(prev.deletedAt)) map.set(t.id, t);
+  });
+  return [...map.values()];
+}
+
+function mergeDayMemos(local, remote) {
+  const keys = new Set([
+    ...Object.keys(local.dayMemos || {}), ...Object.keys(remote.dayMemos || {}),
+    ...Object.keys(local.dayMemoUpdatedAt || {}), ...Object.keys(remote.dayMemoUpdatedAt || {})
+  ]);
+  const values = {}, timestamps = {};
+  keys.forEach(key => {
+    const lt = isoTime(local.dayMemoUpdatedAt?.[key] || local.meta?.updatedAt);
+    const rt = isoTime(remote.dayMemoUpdatedAt?.[key] || remote.meta?.updatedAt);
+    if (lt >= rt) {
+      values[key] = local.dayMemos?.[key] || '';
+      timestamps[key] = local.dayMemoUpdatedAt?.[key] || local.meta?.updatedAt || new Date(0).toISOString();
+    } else {
+      values[key] = remote.dayMemos?.[key] || '';
+      timestamps[key] = remote.dayMemoUpdatedAt?.[key] || remote.meta?.updatedAt || new Date(0).toISOString();
+    }
+  });
+  return { values, timestamps };
+}
+
+function deepClone(obj) {
+  try { return structuredClone(obj); } catch { return JSON.parse(JSON.stringify(obj)); }
+}
+function isoTime(value) {
+  const n = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+function friendlyCloudError(err) {
+  const msg = String(err?.message || err || '未知错误');
+  if (/Invalid login credentials/i.test(msg)) return '邮箱或密码不正确';
+  if (/Email not confirmed/i.test(msg)) return '邮箱尚未确认，请先点击确认邮件中的链接';
+  if (/relation .*phd_tracker_state.* does not exist/i.test(msg)) return '云端数据表尚未创建，请先运行 supabase_setup.sql';
+  if (/row-level security/i.test(msg)) return '数据库权限策略未正确配置，请重新运行 supabase_setup.sql';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return '网络连接失败或 Project URL 不正确';
+  return msg;
 }
 
 function groupByProject(activities) {

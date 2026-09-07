@@ -290,3 +290,34 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   .modal-actions-right { width: 100%; margin-left: 0; }
   .modal-actions-right > * { flex: 1; }
 }
+
+/* V1.3: Supabase cloud sync */
+.settings-wide { grid-column: 1 / -1; }
+.cloud-settings-card { overflow: hidden; }
+.cloud-config-grid, .cloud-auth-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.cloud-auth-panel { margin-top: 4px; }
+.cloud-user-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.cloud-user-row strong { display: block; margin-top: 3px; }
+.cloud-user-row small { display: block; color: var(--muted); margin-top: 5px; }
+.cloud-sync-actions { margin-top: 4px; }
+.cloud-message { margin-top: 14px; border-radius: 12px; padding: 11px 13px; background: #f8fafc; border: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.cloud-message.success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+.cloud-message.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.cloud-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.cloud-badge.local { background: #f1f5f9; color: #475569; }
+.cloud-badge.ready { background: #eff6ff; color: #1d4ed8; }
+.cloud-badge.online { background: #ecfdf5; color: #047857; }
+.cloud-badge.syncing { background: #fff7ed; color: #c2410c; }
+.cloud-badge.offline { background: #f8fafc; color: #64748b; }
+.cloud-mini-status { display: flex; align-items: center; gap: 7px; margin: 0 4px 9px; color: #cbd5e1; font-size: 12px; font-weight: 700; }
+.cloud-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; box-shadow: 0 0 0 3px rgba(100,116,139,.14); }
+.cloud-dot.online { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
+.cloud-dot.syncing { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+.cloud-dot.ready { background: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.15); }
+.cloud-dot.offline { background: #94a3b8; }
+
+@media (max-width: 720px) {
+  .cloud-config-grid, .cloud-auth-grid { grid-template-columns: 1fr; }
+  .cloud-user-row { align-items: flex-start; flex-direction: column; }
+  .cloud-sync-actions > * { width: 100%; }
+}
