@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>PhD Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <div class="brand-title">PhD Tracker</div>
+          <div class="brand-subtitle">Research Dashboard</div>
+        </div>
+      </div>
+
+      <nav class="nav-list" id="navList">
+        <button class="nav-item active" data-page="today">🏠 <span>今天</span></button>
+        <button class="nav-item" data-page="calendar">📅 <span>日历</span></button>
+        <button class="nav-item" data-page="stats">📊 <span>统计</span></button>
+        <button class="nav-item" data-page="memo">📝 <span>备忘录</span></button>
+        <button class="nav-item" data-page="settings">⚙️ <span>设置</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="footer-note">数据默认保存在当前浏览器</div>
+        <button class="secondary-btn full" id="quickExportBtn">导出备份</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">今天</h1>
+          <p id="pageSubtitle" class="muted"></p>
+        </div>
+        <div class="topbar-actions">
+          <button class="secondary-btn" id="jumpTodayBtn">回到今天</button>
+          <button class="primary-btn" id="addActivityBtn">＋ 添加记录</button>
+        </div>
+      </header>
+
+      <section class="page active" id="page-today">
+        <div class="grid-two">
+          <div class="card hero-card">
+            <div class="section-heading-row">
+              <div>
+                <span class="eyebrow">今日概览</span>
+                <h2 id="todayDateHeading">—</h2>
+              </div>
+              <div class="metric-block">
+                <span class="metric-label">已记录</span>
+                <strong id="todayTotalTime">0h 00m</strong>
+              </div>
+            </div>
+            <div class="quick-entry-grid">
+              <button class="quick-chip" data-quick-title="COMSOL 仿真" data-quick-category="科研">COMSOL 仿真</button>
+              <button class="quick-chip" data-quick-title="论文写作" data-quick-category="科研">论文写作</button>
+              <button class="quick-chip" data-quick-title="阅读论文" data-quick-category="科研">阅读论文</button>
+              <button class="quick-chip" data-quick-title="数据处理" data-quick-category="科研">数据处理</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-heading-row compact">
+              <div>
+                <span class="eyebrow">今日分类</span>
+                <h3>时间分配</h3>
+              </div>
+            </div>
+            <div id="todayCategorySummary" class="summary-list"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-heading-row">
+            <div>
+              <span class="eyebrow">Timeline</span>
+              <h2>今日时间轴</h2>
+            </div>
+            <div class="date-controls">
+              <button class="icon-btn" id="prevDayBtn" aria-label="前一天">←</button>
+              <input type="date" id="todayDatePicker" />
+              <button class="icon-btn" id="nextDayBtn" aria-label="后一天">→</button>
+            </div>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-calendar">
+        <div class="calendar-layout">
+          <div class="card calendar-card">
+            <div class="section-heading-row">
+              <div>
+                <span class="eyebrow">Calendar</span>
+                <h2 id="calendarMonthLabel">—</h2>
+              </div>
+              <div class="date-controls">
+                <button class="icon-btn" id="prevMonthBtn">←</button>
+                <button class="secondary-btn" id="calendarTodayBtn">今天</button>
+                <button class="icon-btn" id="nextMonthBtn">→</button>
+              </div>
+            </div>
+            <div class="calendar-weekdays">
+              <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+            </div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </div>
+
+          <div class="card day-detail-card">
+            <div class="section-heading-row compact">
+              <div>
+                <span class="eyebrow">Selected Day</span>
+                <h3 id="selectedDayLabel">—</h3>
+              </div>
+              <button class="primary-btn small" id="addForSelectedDayBtn">＋记录</button>
+            </div>
+            <div id="selectedDayStats" class="mini-stats"></div>
+            <div id="selectedDayActivities" class="compact-list"></div>
+            <div class="divider"></div>
+            <div class="section-heading-row compact">
+              <div>
+                <span class="eyebrow">Memo</span>
+                <h3>当天备忘</h3>
+              </div>
+            </div>
+            <textarea id="selectedDayMemo" class="memo-textarea" placeholder="记录当天待办、实验想法、论文备注……"></textarea>
+            <button class="secondary-btn full" id="saveDayMemoBtn">保存当天备忘</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-stats">
+        <div class="card stats-filter-card">
+          <div class="section-heading-row">
+            <div>
+              <span class="eyebrow">Analytics</span>
+              <h2>时间统计</h2>
+            </div>
+          </div>
+          <div class="range-buttons" id="rangeButtons">
+            <button class="range-btn active" data-range="7">近7天</button>
+            <button class="range-btn" data-range="30">近30天</button>
+            <button class="range-btn" data-range="90">近90天</button>
+            <button class="range-btn" data-range="365">近1年</button>
+            <button class="range-btn" data-range="custom">自定义</button>
+          </div>
+          <div class="custom-range" id="customRangeWrap">
+            <input type="date" id="statsStartDate" />
+            <span>至</span>
+            <input type="date" id="statsEndDate" />
+            <button class="secondary-btn" id="applyCustomRangeBtn">应用</button>
+          </div>
+        </div>
+
+        <div class="stats-cards">
+          <div class="metric-card"><span>总记录时间</span><strong id="statsTotalTime">0h 00m</strong></div>
+          <div class="metric-card"><span>记录条数</span><strong id="statsRecordCount">0</strong></div>
+          <div class="metric-card"><span>日均时间</span><strong id="statsDailyAvg">0h 00m</strong></div>
+          <div class="metric-card"><span>最高投入日</span><strong id="statsBestDay">—</strong></div>
+        </div>
+
+        <div class="grid-two stats-grid">
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Category</span><h3>类别统计</h3></div></div>
+            <div id="categoryStats" class="bar-list"></div>
+          </div>
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Tags</span><h3>标签统计</h3></div></div>
+            <div id="tagStats" class="tag-stat-grid"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-heading-row compact"><div><span class="eyebrow">Trend</span><h3>每日投入趋势</h3></div></div>
+          <div id="trendChart" class="trend-chart"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-memo">
+        <div class="memo-layout">
+          <div class="card">
+            <div class="section-heading-row">
+              <div><span class="eyebrow">Memo</span><h2>备忘录</h2></div>
+              <button class="primary-btn" id="newMemoBtn">＋ 新建</button>
+            </div>
+            <div id="memoList" class="memo-list"></div>
+          </div>
+          <div class="card memo-editor-card">
+            <input id="memoTitleInput" class="memo-title-input" placeholder="备忘录标题" />
+            <textarea id="memoContentInput" class="memo-big-textarea" placeholder="写下待办、灵感、实验记录、论文思路……"></textarea>
+            <div class="memo-editor-actions">
+              <button class="danger-btn" id="deleteMemoBtn">删除</button>
+              <button class="primary-btn" id="saveMemoBtn">保存</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="settings-grid">
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Data</span><h3>数据备份</h3></div></div>
+            <p class="muted">建议定期导出备份文件。导入会与当前数据合并。</p>
+            <div class="settings-actions">
+              <button class="primary-btn" id="exportBtn">导出全部数据</button>
+              <label class="secondary-btn file-label">导入备份<input type="file" id="importInput" accept="application/json" hidden /></label>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Categories</span><h3>默认类别</h3></div></div>
+            <div id="categoryManager" class="category-manager"></div>
+            <div class="inline-form">
+              <input id="newCategoryInput" placeholder="新增类别，如：会议" />
+              <button class="secondary-btn" id="addCategoryBtn">添加</button>
+            </div>
+          </div>
+          <div class="card danger-zone">
+            <div class="section-heading-row compact"><div><span class="eyebrow">Danger Zone</span><h3>清空数据</h3></div></div>
+            <p class="muted">此操作不可撤销，建议先导出备份。</p>
+            <button class="danger-btn" id="clearAllBtn">清空全部本地数据</button>
+          </div>
+          <div class="card">
+            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1</h3></div></div>
+            <p class="muted">当前版本：时间记录、自由标签、日历、备忘录、统计、导入导出。</p>
+            <p class="muted">后续可继续增加：番茄钟、论文项目、科研周报、云同步、AI总结等。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="activityModalBackdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow">Activity</span>
+          <h2 id="activityModalTitle">添加时间记录</h2>
+        </div>
+        <button class="icon-btn" id="closeActivityModalBtn">✕</button>
+      </div>
+      <form id="activityForm">
+        <input type="hidden" id="activityId" />
+        <div class="form-group">
+          <label for="activityTitle">做了什么</label>
+          <input id="activityTitle" required placeholder="例如：COMSOL 冷板模拟" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="activityDate">日期</label>
+            <input type="date" id="activityDate" required />
+          </div>
+          <div class="form-group">
+            <label for="activityCategory">类别</label>
+            <select id="activityCategory"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="activityStartTime">开始时间</label>
+            <input type="time" id="activityStartTime" required />
+          </div>
+          <div class="form-group">
+            <label for="activityEndTime">结束时间</label>
+            <input type="time" id="activityEndTime" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="activityTags">标签</label>
+          <input id="activityTags" placeholder="输入多个标签，用逗号分隔，例如：COMSOL, 冷板, Paper1" />
+          <div class="field-help">支持自由创建标签；不需要提前设置。</div>
+        </div>
+        <div class="form-group">
+          <label for="activityNote">备注</label>
+          <textarea id="activityNote" placeholder="可选：实验参数、论文进展、下一步计划……"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="danger-btn hidden" id="deleteActivityBtn">删除</button>
+          <div class="modal-actions-right">
+            <button type="button" class="secondary-btn" id="cancelActivityBtn">取消</button>
+            <button type="submit" class="primary-btn">保存记录</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

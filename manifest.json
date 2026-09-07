@@ -1,0 +1,9 @@
+{
+  "name": "PhD Tracker",
+  "short_name": "PhD Tracker",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0f172a",
+  "description": "个人科研时间记录、日历、备忘录与统计 Dashboard"
+}
