@@ -1,4 +1,4 @@
-PhD Tracker V1.3 - Supabase 多设备同步配置
+PhD Tracker V1.3.1 - Supabase 多设备同步配置
 ==============================================
 
 目标
@@ -25,7 +25,7 @@ PhD Tracker V1.3 - Supabase 多设备同步配置
    https://mings2026.github.io/phd-tracker/
    如果你启用了 Confirm Email，注册确认邮件会用到这个网址。
 
-5. 将 V1.3 文件上传 GitHub，覆盖旧版本：
+5. 将 V1.3.1 文件上传 GitHub，覆盖旧版本：
    index.html
    app.js
    style.css
@@ -63,8 +63,8 @@ PhD Tracker V1.3 - Supabase 多设备同步配置
 
 V1.2 数据迁移
 -------------
-V1.3 继续使用 localStorage 键 phdTrackerV1，所以同一浏览器直接升级时，V1.2 的本地数据会保留。
-首次登录 Supabase 后，如果云端还没有数据，V1.3 会自动把当前本机数据上传到云端。
+V1.3.1 继续使用 localStorage 键 phdTrackerV1，所以同一浏览器直接升级时，V1.2 的本地数据会保留。
+首次登录 Supabase 后，如果云端还没有数据，V1.3.1 会自动把当前本机数据上传到云端。
 建议升级前仍先点击“导出全部数据”保存一份 JSON 备份。
 
 同步策略
@@ -80,3 +80,8 @@ V1.3 继续使用 localStorage 键 phdTrackerV1，所以同一浏览器直接升
 - 浏览器中只使用 Publishable key（或旧版 anon key）。
 - 数据库开启 RLS，每个登录用户只能访问 user_id = auth.uid() 的数据。
 - 不要把 Supabase Secret key / service_role key 写入 GitHub、HTML、JS 或任何前端文件。
+
+
+V1.3 -> V1.3.1 升级说明
+----------------------
+如果 V1.3 已经能在电脑端正常连接 Supabase，则升级到 V1.3.1 时不需要重新建项目、不需要重新运行 SQL、不需要重新注册账号。直接覆盖 GitHub Pages 前端文件即可。

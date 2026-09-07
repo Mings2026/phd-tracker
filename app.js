@@ -1,8 +1,11 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.3.1';
 const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
 const CLOUD_TABLE = 'phd_tracker_state';
 const CLOUD_SYNC_DELAY_MS = 900;
+const CLOUD_AUTH_TIMEOUT_MS = 15000;
+const CLOUD_SESSION_TIMEOUT_MS = 8000;
+const CLOUD_SYNC_TIMEOUT_MS = 20000;
 const DEFAULT_CATEGORIES = ['科研', '学习', '会议', '生活', '运动', '娱乐'];
 const CATEGORY_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#ea580c', '#db2777', '#4f46e5', '#ca8a04'];
 
@@ -23,7 +26,8 @@ const state = {
     syncing: false,
     lastRemoteUpdatedAt: null,
     authSubscription: null,
-    pollInterval: null
+    pollInterval: null,
+    authBusy: false
   }
 };
 
@@ -94,7 +98,7 @@ function bindEvents() {
   els.newProjectInput.addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
-  // V1.3 Supabase cloud sync
+  // V1.3.1 Supabase cloud sync (mobile auth hardened)
   els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
   els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
   els.cloudLoginBtn?.addEventListener('click', cloudLogin);
@@ -106,6 +110,11 @@ function bindEvents() {
   window.addEventListener('online', () => { renderCloudUI(); if (state.cloud.user) syncCloudBidirectional({ silent: true }); });
   window.addEventListener('offline', renderCloudUI);
   window.addEventListener('focus', () => { if (state.cloud.user) pullCloudIfNewer(); });
+  // iOS Safari may restore a page from the back/forward cache. Refresh the auth state
+  // instead of leaving a stale mobile session UI behind.
+  window.addEventListener('pageshow', () => {
+    if (state.cloud.client && navigator.onLine) refreshCloudSessionNonBlocking();
+  });
 
   els.closeActivityModalBtn.addEventListener('click', closeActivityModal);
   els.cancelActivityBtn.addEventListener('click', closeActivityModal);
@@ -774,8 +783,115 @@ function clearTimerInputs() {
 
 
 // ------------------------------
-// V1.3 Supabase cloud sync
+// V1.3.1 Supabase cloud sync - mobile auth hardened
 // ------------------------------
+class CloudTimeoutError extends Error {
+  constructor(label, ms) {
+    super(`${label}等待超过 ${Math.round(ms / 1000)} 秒`);
+    this.name = 'CloudTimeoutError';
+    this.isCloudTimeout = true;
+  }
+}
+
+function withCloudTimeout(promise, ms, label) {
+  let timerId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timerId = setTimeout(() => reject(new CloudTimeoutError(label, ms)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeoutPromise])
+    .finally(() => clearTimeout(timerId));
+}
+
+function setCloudAuthBusy(busy, action = '') {
+  state.cloud.authBusy = !!busy;
+  const loginBtn = els.cloudLoginBtn;
+  const signupBtn = els.cloudSignupBtn;
+  if (loginBtn) {
+    if (!loginBtn.dataset.defaultText) loginBtn.dataset.defaultText = loginBtn.textContent;
+    loginBtn.disabled = !!busy;
+    loginBtn.textContent = busy && action === 'login' ? '正在验证…' : loginBtn.dataset.defaultText;
+  }
+  if (signupBtn) {
+    if (!signupBtn.dataset.defaultText) signupBtn.dataset.defaultText = signupBtn.textContent;
+    signupBtn.disabled = !!busy;
+    signupBtn.textContent = busy && action === 'signup' ? '正在注册…' : signupBtn.dataset.defaultText;
+  }
+}
+
+function cleanupCloudClientRuntime() {
+  try { state.cloud.authSubscription?.unsubscribe?.(); } catch {}
+  state.cloud.authSubscription = null;
+  if (state.cloud.pollInterval) clearInterval(state.cloud.pollInterval);
+  state.cloud.pollInterval = null;
+  try { state.cloud.client?.auth?.stopAutoRefresh?.(); } catch {}
+}
+
+function newSupabaseClient(config) {
+  if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
+  // V1.3.1 pins a lockless Supabase JS release. No custom navigator lock is used.
+  return window.supabase.createClient(config.url, config.key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
+}
+
+async function rebuildCloudClientAfterTimeout(config) {
+  cleanupCloudClientRuntime();
+  state.cloud.client = null;
+  state.cloud.user = null;
+  renderCloudUI();
+  // Give a suspended mobile tab a brief moment to release pending browser work.
+  await new Promise(resolve => setTimeout(resolve, 180));
+  state.cloud.client = newSupabaseClient(config);
+  attachCloudAuthListener();
+  startCloudPolling();
+  renderCloudUI();
+  return state.cloud.client;
+}
+
+function attachCloudAuthListener() {
+  if (!state.cloud.client) return;
+  try { state.cloud.authSubscription?.unsubscribe?.(); } catch {}
+  const sub = state.cloud.client.auth.onAuthStateChange((event, session) => {
+    state.cloud.user = session?.user || null;
+    renderCloudUI();
+    if (event === 'SIGNED_IN' && state.cloud.user) {
+      setTimeout(() => syncCloudBidirectional({ silent: true }), 0);
+    }
+    if (event === 'SIGNED_OUT') {
+      setCloudMessage('已退出云端账号。当前数据仍保存在本机。');
+    }
+  });
+  state.cloud.authSubscription = sub.data?.subscription || null;
+}
+
+function startCloudPolling() {
+  if (state.cloud.pollInterval) clearInterval(state.cloud.pollInterval);
+  state.cloud.pollInterval = setInterval(() => {
+    if (state.cloud.user && navigator.onLine && !document.hidden) pullCloudIfNewer();
+  }, 60000);
+}
+
+async function refreshCloudSessionNonBlocking() {
+  if (!state.cloud.client) return;
+  try {
+    const { data, error } = await withCloudTimeout(
+      state.cloud.client.auth.getSession(),
+      CLOUD_SESSION_TIMEOUT_MS,
+      '检查登录状态'
+    );
+    if (error) throw error;
+    state.cloud.user = data.session?.user || null;
+    renderCloudUI();
+  } catch (err) {
+    // A restored mobile tab should never freeze the UI because auth state probing got stuck.
+    console.warn('refreshCloudSessionNonBlocking:', err);
+  }
+}
+
 function validCloudConfig(config) {
   return !!(config && typeof config.url === 'string' && /^https:\/\//.test(config.url.trim()) && typeof config.key === 'string' && config.key.trim().length > 20);
 }
@@ -840,43 +956,48 @@ async function initCloud() {
 
 async function createCloudClient(config) {
   if (!validCloudConfig(config)) throw new Error('Supabase 配置不完整');
-  if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
+  cleanupCloudClientRuntime();
 
-  if (state.cloud.authSubscription?.unsubscribe) state.cloud.authSubscription.unsubscribe();
-  if (state.cloud.pollInterval) clearInterval(state.cloud.pollInterval);
-
-  state.cloud.client = window.supabase.createClient(config.url, config.key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-  });
+  state.cloud.client = newSupabaseClient(config);
+  state.cloud.user = null;
+  attachCloudAuthListener();
+  startCloudPolling();
   renderCloudUI();
   setCloudMessage('Supabase 已配置。正在检查登录状态…');
 
-  const { data, error } = await state.cloud.client.auth.getSession();
-  if (error) throw error;
-  state.cloud.user = data.session?.user || null;
-
-  const sub = state.cloud.client.auth.onAuthStateChange((event, session) => {
-    state.cloud.user = session?.user || null;
-    renderCloudUI();
-    if (event === 'SIGNED_IN' && state.cloud.user) {
-      setTimeout(() => syncCloudBidirectional({ silent: true }), 0);
+  try {
+    const { data, error } = await withCloudTimeout(
+      state.cloud.client.auth.getSession(),
+      CLOUD_SESSION_TIMEOUT_MS,
+      '检查登录状态'
+    );
+    if (error) throw error;
+    state.cloud.user = data.session?.user || null;
+  } catch (err) {
+    console.warn('Supabase getSession timeout/error:', err);
+    if (err?.isCloudTimeout) {
+      // Crucially, do not block the whole app on mobile if getSession never resolves.
+      state.cloud.user = null;
+      renderCloudUI();
+      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.1 会自动重试。', 'error');
+      return;
     }
-    if (event === 'SIGNED_OUT') {
-      setCloudMessage('已退出云端账号。当前数据仍保存在本机。');
-    }
-  });
-  state.cloud.authSubscription = sub.data?.subscription || null;
+    throw err;
+  }
 
   if (state.cloud.user) {
-    setCloudMessage(`已登录 ${state.cloud.user.email || ''}，正在同步…`);
-    await syncCloudBidirectional({ silent: true });
+    renderCloudUI();
+    setCloudMessage(`账号已登录：${state.cloud.user.email || ''}。正在读取云端数据…`);
+    try {
+      await withCloudTimeout(syncCloudBidirectional({ silent: true }), CLOUD_SYNC_TIMEOUT_MS, '首次云端同步');
+      setCloudMessage('账号已登录，云端同步正常。', 'success');
+    } catch (err) {
+      console.warn('Initial sync timeout/error:', err);
+      setCloudMessage(`账号已登录，但首次同步未完成：${friendlyCloudError(err)}。可点击“立即双向同步”重试。`, 'error');
+    }
   } else {
     setCloudMessage('Supabase 连接正常。登录或注册后即可在不同设备共享数据。', 'success');
   }
-
-  state.cloud.pollInterval = setInterval(() => {
-    if (state.cloud.user && navigator.onLine && !document.hidden) pullCloudIfNewer();
-  }, 60000);
   renderCloudUI();
 }
 
@@ -907,10 +1028,10 @@ async function testCloudConnection() {
   if (!validCloudConfig(config)) return toast('请先填写 Supabase Project URL 和 Publishable key');
   try {
     setCloudMessage('正在测试 Supabase 连接…');
-    if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本未加载');
-    const temp = window.supabase.createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { error } = await temp.auth.getSession();
-    if (error) throw error;
+    const response = await withCloudTimeout(fetch(`${config.url.replace(/\/$/, '')}/auth/v1/settings`, {
+      headers: { apikey: config.key }
+    }), 10000, '连接测试');
+    if (!response.ok) throw new Error(`Supabase 返回 HTTP ${response.status}`);
     setCloudMessage('连接测试成功。保存连接后即可登录。', 'success');
     toast('Supabase 连接正常');
   } catch (err) {
@@ -930,55 +1051,125 @@ async function ensureCloudClient() {
 }
 
 async function cloudSignup() {
+  if (state.cloud.authBusy) return;
   if (!await ensureCloudClient()) return;
   const email = (els.cloudEmailInput?.value || '').trim();
   const password = els.cloudPasswordInput?.value || '';
   if (!email || password.length < 6) return toast('请输入邮箱和至少 6 位密码');
+  setCloudAuthBusy(true, 'signup');
   try {
     setCloudMessage('正在创建账号…');
-    const { data, error } = await state.cloud.client.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: window.location.origin + window.location.pathname }
-    });
+    const { data, error } = await withCloudTimeout(
+      state.cloud.client.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: window.location.origin + window.location.pathname }
+      }),
+      CLOUD_AUTH_TIMEOUT_MS,
+      '注册请求'
+    );
     if (error) throw error;
     if (data.session) {
       state.cloud.user = data.user;
       renderCloudUI();
-      await syncCloudBidirectional({ silent: true });
-      setCloudMessage('注册并登录成功，数据已开始云同步。', 'success');
+      setCloudMessage('账号已创建并登录。正在同步云端数据…');
+      try {
+        await withCloudTimeout(syncCloudBidirectional({ silent: true }), CLOUD_SYNC_TIMEOUT_MS, '首次云端同步');
+        setCloudMessage('注册并登录成功，云端同步正常。', 'success');
+      } catch (syncErr) {
+        setCloudMessage(`账号已注册并登录，但首次同步未完成：${friendlyCloudError(syncErr)}。可稍后点击“立即双向同步”。`, 'error');
+      }
     } else {
       setCloudMessage('注册成功。请到邮箱点击 Supabase 的确认链接，然后回到本页登录。', 'success');
     }
   } catch (err) {
-    setCloudMessage(`注册失败：${friendlyCloudError(err)}`, 'error');
+    if (err?.isCloudTimeout) {
+      const config = getCloudConfig();
+      try { await rebuildCloudClientAfterTimeout(config); } catch {}
+      setCloudMessage('注册请求超时，客户端已自动重置。请检查手机网络后再点一次“注册账号”。', 'error');
+    } else {
+      setCloudMessage(`注册失败：${friendlyCloudError(err)}`, 'error');
+    }
+  } finally {
+    setCloudAuthBusy(false);
   }
 }
 
 async function cloudLogin() {
+  if (state.cloud.authBusy) return;
   if (!await ensureCloudClient()) return;
   const email = (els.cloudEmailInput?.value || '').trim();
   const password = els.cloudPasswordInput?.value || '';
   if (!email || !password) return toast('请输入邮箱和密码');
+  setCloudAuthBusy(true, 'login');
+  let retried = false;
   try {
-    setCloudMessage('正在登录…');
-    const { data, error } = await state.cloud.client.auth.signInWithPassword({ email, password });
+    let result;
+    while (true) {
+      try {
+        setCloudMessage(retried ? '手机端首次响应超时，正在自动重试账号验证…' : '正在验证账号…');
+        result = await withCloudTimeout(
+          state.cloud.client.auth.signInWithPassword({ email, password }),
+          CLOUD_AUTH_TIMEOUT_MS,
+          '账号验证'
+        );
+        break;
+      } catch (err) {
+        if (!err?.isCloudTimeout || retried) throw err;
+        retried = true;
+        const config = getCloudConfig();
+        await rebuildCloudClientAfterTimeout(config);
+      }
+    }
+
+    const { data, error } = result;
     if (error) throw error;
-    state.cloud.user = data.user;
+    state.cloud.user = data.user || data.session?.user || null;
+    if (!state.cloud.user) throw new Error('登录响应中未返回用户信息');
     renderCloudUI();
-    await syncCloudBidirectional({ manual: true });
+
+    // Authentication and data synchronization are deliberately separated so a
+    // slow database request can never make a successful login look permanently stuck.
+    setCloudMessage(`账号登录成功：${state.cloud.user.email || email}。正在读取云端数据…`, 'success');
+    try {
+      await withCloudTimeout(
+        syncCloudBidirectional({ manual: false, silent: true }),
+        CLOUD_SYNC_TIMEOUT_MS,
+        '云端同步'
+      );
+      setCloudMessage('账号登录成功，云端数据已同步。', 'success');
+      toast('登录并同步成功');
+    } catch (syncErr) {
+      console.warn('Login succeeded but sync did not finish:', syncErr);
+      setCloudMessage(`账号已经登录，但同步暂未完成：${friendlyCloudError(syncErr)}。你的本地数据仍安全，可点击“立即双向同步”重试。`, 'error');
+      toast('账号已登录');
+    }
   } catch (err) {
-    setCloudMessage(`登录失败：${friendlyCloudError(err)}`, 'error');
+    console.error('cloudLogin:', err);
+    if (err?.isCloudTimeout) {
+      const config = getCloudConfig();
+      try { await rebuildCloudClientAfterTimeout(config); } catch {}
+      setCloudMessage('登录请求两次均超时。客户端已自动恢复，不会一直卡在“正在登录”。请切换手机网络或稍后重试。', 'error');
+    } else {
+      setCloudMessage(`登录失败：${friendlyCloudError(err)}`, 'error');
+    }
+  } finally {
+    setCloudAuthBusy(false);
+    renderCloudUI();
   }
 }
 
 async function cloudLogout() {
   if (!state.cloud.client) return;
   try {
-    await state.cloud.client.auth.signOut();
+    await withCloudTimeout(state.cloud.client.auth.signOut(), CLOUD_AUTH_TIMEOUT_MS, '退出登录');
     state.cloud.user = null;
     renderCloudUI();
     setCloudMessage('已退出登录。当前设备仍保留一份本地缓存。');
-  } catch (err) { setCloudMessage(`退出失败：${friendlyCloudError(err)}`, 'error'); }
+  } catch (err) {
+    state.cloud.user = null;
+    renderCloudUI();
+    setCloudMessage(`退出操作未完整返回：${friendlyCloudError(err)}。本机已结束当前登录显示。`, 'error');
+  }
 }
 
 function scheduleCloudSync() {
@@ -1200,6 +1391,7 @@ function friendlyCloudError(err) {
   if (/Email not confirmed/i.test(msg)) return '邮箱尚未确认，请先点击确认邮件中的链接';
   if (/relation .*phd_tracker_state.* does not exist/i.test(msg)) return '云端数据表尚未创建，请先运行 supabase_setup.sql';
   if (/row-level security/i.test(msg)) return '数据库权限策略未正确配置，请重新运行 supabase_setup.sql';
+  if (err?.isCloudTimeout || /等待超过|超时|timeout/i.test(msg)) return '请求超时；请检查手机网络后重试';
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return '网络连接失败或 Project URL 不正确';
   return msg;
 }
