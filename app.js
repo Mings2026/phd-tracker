@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'phdTrackerV1';
+const APP_VERSION = '1.2';
 const DEFAULT_CATEGORIES = ['科研', '学习', '会议', '生活', '运动', '娱乐'];
 const CATEGORY_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#ea580c', '#db2777', '#4f46e5', '#ca8a04'];
 
@@ -89,12 +90,21 @@ function bindEvents() {
 }
 
 function ensureDefaults() {
-  if (!Array.isArray(state.data.categories) || !state.data.categories.length) state.data.categories = [...DEFAULT_CATEGORIES];
+  // V1.2: tolerate older/local data shapes and always keep category selectors usable.
+  const rawCategories = Array.isArray(state.data.categories) ? state.data.categories : [];
+  const normalizedCategories = rawCategories
+    .map(c => typeof c === 'string' ? c.trim() : (c && typeof c.name === 'string' ? c.name.trim() : ''))
+    .filter(Boolean);
+  state.data.categories = [...new Set(normalizedCategories.length ? normalizedCategories : DEFAULT_CATEGORIES)];
+  if (!state.data.categories.includes('科研')) state.data.categories.unshift('科研');
+
   if (!Array.isArray(state.data.activities)) state.data.activities = [];
   if (!Array.isArray(state.data.memos)) state.data.memos = [];
-  if (!state.data.dayMemos) state.data.dayMemos = {};
+  if (!state.data.dayMemos || typeof state.data.dayMemos !== 'object') state.data.dayMemos = {};
   if (!Array.isArray(state.data.projects)) state.data.projects = [];
   state.data.activities.forEach(a => {
+    if (!a || typeof a !== 'object') return;
+    if (!a.category || typeof a.category !== 'string') a.category = '科研';
     if (a.project && !state.data.projects.includes(a.project)) state.data.projects.push(a.project);
   });
   if (!state.data.timer || typeof state.data.timer !== 'object') state.data.timer = { active: false };
@@ -455,10 +465,16 @@ function populateCategorySelect() {
 
 function populateTimerCategorySelect() {
   if (!els.timerCategory) return;
+  const categories = Array.isArray(state.data.categories)
+    ? state.data.categories.filter(c => typeof c === 'string' && c.trim())
+    : [];
+  const safeCategories = categories.length ? categories : [...DEFAULT_CATEGORIES];
   const current = els.timerCategory.value;
-  els.timerCategory.innerHTML = state.data.categories.map(c=>`<option>${escapeHtml(c)}</option>`).join('');
-  if (current && state.data.categories.includes(current)) els.timerCategory.value = current;
-  else if (state.data.categories.includes('科研')) els.timerCategory.value = '科研';
+  els.timerCategory.innerHTML = safeCategories
+    .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (current && safeCategories.includes(current)) els.timerCategory.value = current;
+  else if (safeCategories.includes('科研')) els.timerCategory.value = '科研';
+  else els.timerCategory.selectedIndex = 0;
 }
 
 function populateProjectDatalist() {
@@ -476,14 +492,14 @@ function addCategory() {
   if (state.data.categories.includes(name)) return toast('这个类别已经存在');
   state.data.categories.push(name);
   els.newCategoryInput.value = '';
-  saveData(); populateCategorySelect(); renderCategoryManager(); toast('类别已添加');
+  saveData(); populateCategorySelect(); populateTimerCategorySelect(); renderCategoryManager(); toast('类别已添加');
 }
 function removeCategory(name) {
   if (state.data.categories.length <= 1) return toast('至少保留一个类别');
   const count = state.data.activities.filter(a=>a.category===name).length;
   if (count && !confirm(`已有 ${count} 条记录使用“${name}”。删除类别不会删除这些历史记录。继续吗？`)) return;
   state.data.categories = state.data.categories.filter(c=>c!==name);
-  saveData(); populateCategorySelect(); renderCategoryManager(); toast('类别已删除');
+  saveData(); populateCategorySelect(); populateTimerCategorySelect(); renderCategoryManager(); toast('类别已删除');
 }
 
 function renderProjectManager() {
@@ -519,7 +535,7 @@ function removeProject(name) {
 
 function exportData() {
   const payload = {
-    app: 'PhD Tracker', version: 2, exportedAt: new Date().toISOString(), data: state.data
+    app: 'PhD Tracker', version: APP_VERSION, exportedAt: new Date().toISOString(), data: state.data
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -616,8 +632,11 @@ function updateTimerClockOnly() {
 }
 
 function startTimer() {
-  const title = els.timerTitle.value.trim();
-  if (!title) return toast('请先填写正在做什么');
+  // V1.2: the button must always be actionable. If the task title is blank,
+  // use the selected category as a sensible temporary title instead of blocking.
+  populateTimerCategorySelect();
+  const category = (els.timerCategory?.value || '科研').trim() || '科研';
+  const title = els.timerTitle.value.trim() || category;
   const now = new Date();
   const project = els.timerProject.value.trim();
   if (project) ensureProject(project);
@@ -625,14 +644,17 @@ function startTimer() {
     active: true,
     running: true,
     title,
-    category: els.timerCategory.value || '科研',
+    category,
     project,
     tags: normalizeTags(els.timerTags.value),
     originalStartAt: now.toISOString(),
     segmentStartedAt: now.toISOString(),
     accumulatedSeconds: 0
   };
-  saveData(); populateProjectDatalist(); renderTimer(); toast('计时已开始');
+  saveData();
+  populateProjectDatalist();
+  renderTimer();
+  toast(`计时已开始：${title}`);
 }
 
 function pauseTimer() {

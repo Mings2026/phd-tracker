@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
-  <title>PhD Tracker V1.1</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
+  <title>PhD Tracker V1.2</title>
+  <link rel="stylesheet" href="style.css?v=1.2" />
+  <link rel="manifest" href="manifest.json?v=1.2" />
 </head>
 <body>
   <div class="app-shell">
@@ -15,7 +15,7 @@
         <div class="brand-mark">P</div>
         <div>
           <div class="brand-title">PhD Tracker</div>
-          <div class="brand-subtitle">Research Dashboard · V1.1</div>
+          <div class="brand-subtitle">Research Dashboard · V1.2</div>
         </div>
       </div>
 
@@ -59,10 +59,11 @@
               </div>
             </div>
             <div class="quick-entry-grid">
-              <button class="quick-chip" data-quick-title="COMSOL 仿真" data-quick-category="科研">COMSOL 仿真</button>
-              <button class="quick-chip" data-quick-title="论文写作" data-quick-category="科研">论文写作</button>
-              <button class="quick-chip" data-quick-title="阅读论文" data-quick-category="科研">阅读论文</button>
-              <button class="quick-chip" data-quick-title="数据处理" data-quick-category="科研">数据处理</button>
+              <button type="button" class="quick-chip" data-quick-title="建模仿真" data-quick-category="科研">建模仿真</button>
+              <button type="button" class="quick-chip" data-quick-title="阅读论文" data-quick-category="科研">阅读论文</button>
+              <button type="button" class="quick-chip" data-quick-title="论文写作" data-quick-category="科研">论文写作</button>
+              <button type="button" class="quick-chip" data-quick-title="数据处理" data-quick-category="科研">数据处理</button>
+              <button type="button" class="quick-chip" data-quick-title="实验测试" data-quick-category="科研">实验测试</button>
             </div>
           </div>
 
@@ -97,7 +98,14 @@
               </div>
               <div class="timer-field">
                 <label for="timerCategory">类别</label>
-                <select id="timerCategory"></select>
+                <select id="timerCategory" aria-label="计时类别">
+                  <option value="科研">科研</option>
+                  <option value="学习">学习</option>
+                  <option value="会议">会议</option>
+                  <option value="生活">生活</option>
+                  <option value="运动">运动</option>
+                  <option value="娱乐">娱乐</option>
+                </select>
               </div>
               <div class="timer-field">
                 <label for="timerProject">项目 / 论文</label>
@@ -110,11 +118,11 @@
             </div>
           </div>
           <div class="timer-actions">
-            <button class="primary-btn" id="timerStartBtn">▶ 开始计时</button>
-            <button class="secondary-btn hidden" id="timerPauseBtn">暂停</button>
-            <button class="primary-btn hidden" id="timerResumeBtn">继续</button>
-            <button class="secondary-btn hidden" id="timerStopBtn">■ 停止并保存</button>
-            <button class="danger-btn hidden" id="timerCancelBtn">放弃计时</button>
+            <button type="button" class="primary-btn" id="timerStartBtn">▶ 开始计时</button>
+            <button type="button" class="secondary-btn hidden" id="timerPauseBtn">暂停</button>
+            <button type="button" class="primary-btn hidden" id="timerResumeBtn">继续</button>
+            <button type="button" class="secondary-btn hidden" id="timerStopBtn">■ 停止并保存</button>
+            <button type="button" class="danger-btn hidden" id="timerCancelBtn">放弃计时</button>
           </div>
         </div>
 
@@ -382,6 +390,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.2"></script>
 </body>
 </html>
