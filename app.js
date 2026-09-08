@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.3.3';
+const APP_VERSION = '1.3.4';
 const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
 const CLOUD_TABLE = 'phd_tracker_state';
 const CLOUD_SYNC_DELAY_MS = 900;
@@ -91,7 +91,7 @@ function clearMisplacedAccountAutofill(field) {
   if (!field || !('value' in field)) return;
   let browserAutofilled = false;
   try { browserAutofilled = field.matches(':-webkit-autofill'); } catch {}
-  // V1.3.3: credential fields never coexist with normal app fields unless the
+  // V1.3.4: credential fields never coexist with normal app fields unless the
   // user explicitly opens the auth modal. Any browser/password-manager autofill
   // detected on a protected business field is therefore unwanted and is cleared.
   if (browserAutofilled) {
@@ -111,6 +111,11 @@ function bindEvents() {
   document.querySelectorAll('.quick-chip').forEach(btn => btn.addEventListener('click', () => {
     openActivityModal({ title: btn.dataset.quickTitle, category: btn.dataset.quickCategory, date: state.selectedDate });
   }));
+  els.todayViewAllMemosBtn?.addEventListener('click', () => switchPage('memo'));
+  els.todayNewMemoBtn?.addEventListener('click', () => {
+    switchPage('memo');
+    newMemo();
+  });
 
   els.timerStartBtn.addEventListener('click', startTimer);
   els.timerPauseBtn.addEventListener('click', pauseTimer);
@@ -147,7 +152,7 @@ function bindEvents() {
   els.projectForm?.addEventListener('submit', e => { e.preventDefault(); addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
-  // V1.3.3 Supabase cloud sync + credential isolation
+  // V1.3.4 Supabase cloud sync + credential isolation
   els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
   els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
   els.openCloudAuthBtn?.addEventListener('click', openCloudAuthModal);
@@ -245,6 +250,7 @@ function switchPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(`page-${page}`).classList.add('active');
   renderPageMeta();
+  if (page === 'today') renderToday();
   if (page === 'calendar') renderCalendar();
   if (page === 'stats') renderStats();
   if (page === 'memo') renderMemoList();
@@ -275,6 +281,8 @@ function renderToday() {
   els.todayCategorySummary.innerHTML = grouped.length
     ? grouped.map((g, i) => `<div class="summary-row"><span class="color-dot" style="background:${categoryColor(g.name)}"></span><span class="summary-name">${escapeHtml(g.name)}</span><span class="summary-time">${formatMinutes(g.minutes)}</span></div>`).join('')
     : '<div class="empty-state">今天还没有记录。点击“添加记录”开始。</div>';
+
+  renderTodayMemos();
 
   if (!activities.length) {
     els.timeline.innerHTML = '<div class="empty-state">暂无时间记录。你可以点击上方快捷按钮，或者“＋ 添加记录”。</div>';
@@ -439,6 +447,47 @@ function aggregateSeries(series, size) {
   return out;
 }
 
+function renderTodayMemos() {
+  if (!els.todayMemoList) return;
+  const sorted = [...state.data.memos]
+    .sort((a,b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))
+    .slice(0, 4);
+
+  if (!sorted.length) {
+    els.todayMemoList.innerHTML = `
+      <div class="today-memo-empty">
+        <div class="today-memo-empty-icon">📝</div>
+        <div>
+          <strong>还没有备忘录</strong>
+          <p>记录论文思路、实验待办或临时灵感后，它们会出现在这里。</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  els.todayMemoList.innerHTML = sorted.map(m => {
+    const content = String(m.content || '').replace(/\s+/g, ' ').trim();
+    const preview = content.length > 120 ? `${content.slice(0, 120)}…` : content;
+    return `<button class="today-memo-item" type="button" data-today-memo-id="${escapeHtml(m.id)}">
+      <div class="today-memo-item-head">
+        <strong>${escapeHtml(m.title || '未命名备忘录')}</strong>
+        <span>${formatDateTime(m.updatedAt || m.createdAt)}</span>
+      </div>
+      <p>${preview ? escapeHtml(preview) : '暂无正文，点击继续编辑。'}</p>
+      <div class="today-memo-open">打开备忘录 →</div>
+    </button>`;
+  }).join('');
+
+  els.todayMemoList.querySelectorAll('[data-today-memo-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.editingMemoId = btn.dataset.todayMemoId;
+      switchPage('memo');
+      renderMemoList();
+      setTimeout(() => els.memoTitleInput?.focus(), 0);
+    });
+  });
+}
+
 function renderMemoList() {
   const sorted = [...state.data.memos].sort((a,b)=>new Date(b.updatedAt)-new Date(a.updatedAt));
   if (!sorted.length) {
@@ -461,7 +510,7 @@ function newMemo() {
   const memo = { id: uid(), title: '新备忘录', content: '', createdAt: now, updatedAt: now };
   state.data.memos.push(memo);
   state.editingMemoId = memo.id;
-  saveData(); renderMemoList();
+  saveData(); renderMemoList(); renderTodayMemos();
   setTimeout(() => els.memoTitleInput.focus(), 0);
 }
 function saveMemo() {
@@ -472,7 +521,7 @@ function saveMemo() {
   memo.content = els.memoContentInput.value;
   memo.updatedAt = new Date().toISOString();
   state.data.deletedMemos = (state.data.deletedMemos || []).filter(t => t.id !== memo.id);
-  saveData(); renderMemoList(); toast('备忘录已保存');
+  saveData(); renderMemoList(); renderTodayMemos(); toast('备忘录已保存');
 }
 function deleteMemo() {
   if (!state.editingMemoId) return;
@@ -481,7 +530,7 @@ function deleteMemo() {
   state.data.memos = state.data.memos.filter(m=>m.id!==state.editingMemoId);
   state.data.deletedMemos = upsertTombstone(state.data.deletedMemos, state.editingMemoId);
   state.editingMemoId = null;
-  saveData(); renderMemoList(); toast('备忘录已删除');
+  saveData(); renderMemoList(); renderTodayMemos(); toast('备忘录已删除');
 }
 
 function openActivityModal(prefill={}) {
@@ -831,7 +880,7 @@ function clearTimerInputs() {
 
 
 // ------------------------------
-// V1.3.3 Supabase cloud sync - credential isolation + mobile auth hardened
+// V1.3.4 Supabase cloud sync - credential isolation + mobile auth hardened
 // ------------------------------
 class CloudTimeoutError extends Error {
   constructor(label, ms) {
@@ -953,7 +1002,7 @@ function cleanupCloudClientRuntime() {
 
 function newSupabaseClient(config) {
   if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
-  // V1.3.3 keeps the pinned Supabase JS release and isolates credential fields in an ephemeral modal.
+  // V1.3.4 keeps the pinned Supabase JS release and isolates credential fields in an ephemeral modal.
   return window.supabase.createClient(config.url, config.key, {
     auth: {
       persistSession: true,
@@ -1105,7 +1154,7 @@ async function createCloudClient(config) {
       // Crucially, do not block the whole app on mobile if getSession never resolves.
       state.cloud.user = null;
       renderCloudUI();
-      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.3 会自动重试。', 'error');
+      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.4 会自动重试。', 'error');
       return;
     }
     throw err;

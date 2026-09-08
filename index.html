@@ -5,9 +5,9 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <meta content="#0f172a" name="theme-color"/>
-<title>PhD Tracker V1.3.3</title>
-<link href="style.css?v=1.3.3" rel="stylesheet"/>
-<link href="manifest.json?v=1.3.3" rel="manifest"/>
+<title>PhD Tracker V1.3.4</title>
+<link href="style.css?v=1.3.4" rel="stylesheet"/>
+<link href="manifest.json?v=1.3.4" rel="manifest"/>
 </head>
 <body>
 <div class="app-shell">
@@ -16,7 +16,7 @@
 <div class="brand-mark">P</div>
 <div>
 <div class="brand-title">PhD Tracker</div>
-<div class="brand-subtitle">Research Dashboard · V1.3.3</div>
+<div class="brand-subtitle">Research Dashboard · V1.3.4</div>
 </div>
 </div>
 <nav class="nav-list" id="navList">
@@ -28,7 +28,7 @@
 </nav>
 <div class="sidebar-footer">
 <div class="cloud-mini-status" id="cloudMiniStatus"><span class="cloud-dot local"></span><span>本地模式</span></div>
-<div class="footer-note">V1.3.3 将账号凭据与业务输入彻底隔离，减少浏览器密码管理器误判。</div>
+<div class="footer-note">V1.3.4 在凭据隔离基础上，将独立备忘录同步展示到“今天”主页。</div>
 <button class="secondary-btn full" id="quickExportBtn">导出备份</button>
 </div>
 </aside>
@@ -91,7 +91,7 @@
 <div class="timer-fields">
 <div class="timer-field timer-field-wide">
 <label for="timerTitle">正在做什么</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTitle" name="phd_timerTitle_v133" placeholder="例如：COMSOL 冷板仿真" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTitle" name="phd_timerTitle_v134" placeholder="例如：COMSOL 冷板仿真" spellcheck="false"/>
 </div>
 <div class="timer-field">
 <label for="timerCategory">类别</label>
@@ -106,11 +106,11 @@
 </div>
 <div class="timer-field">
 <label for="timerProject">项目 / 论文</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerProject" list="projectDatalist" name="phd_timerProject_v133" placeholder="例如：Paper 1" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerProject" list="projectDatalist" name="phd_timerProject_v134" placeholder="例如：Paper 1" spellcheck="false"/>
 </div>
 <div class="timer-field timer-field-wide">
 <label for="timerTags">标签</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTags" name="phd_timerTags_v133" placeholder="COMSOL, 冷板, 仿真" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTags" name="phd_timerTags_v134" placeholder="COMSOL, 冷板, 仿真" spellcheck="false"/>
 </div>
 </div>
 </div>
@@ -131,11 +131,25 @@
 </div>
 <div class="date-controls">
 <button aria-label="前一天" class="icon-btn" id="prevDayBtn">←</button>
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="todayDatePicker" name="phd_todayDatePicker_v133" type="date"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="todayDatePicker" name="phd_todayDatePicker_v134" type="date"/>
 <button aria-label="后一天" class="icon-btn" id="nextDayBtn">→</button>
 </div>
 </div>
 <div class="timeline" id="timeline"></div>
+</div>
+<div class="card today-memo-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Memo</span>
+<h2>备忘录</h2>
+<p class="muted today-memo-subtitle">这里显示你最近更新的备忘录，点击即可继续编辑。</p>
+</div>
+<div class="today-memo-actions">
+<button class="secondary-btn" id="todayViewAllMemosBtn" type="button">查看全部</button>
+<button class="primary-btn" id="todayNewMemoBtn" type="button">＋ 新建备忘录</button>
+</div>
+</div>
+<div class="today-memo-grid" id="todayMemoList"></div>
 </div>
 </section>
 <section class="page" id="page-calendar">
@@ -175,7 +189,7 @@
 </div>
 </div>
 <form autocomplete="off" id="dayMemoForm" data-form-purpose="day-memo">
-<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="selectedDayMemo" name="phd_selectedDayMemo_v133" placeholder="记录当天待办、实验想法、论文备注……" spellcheck="false"></textarea>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="selectedDayMemo" name="phd_selectedDayMemo_v134" placeholder="记录当天待办、实验想法、论文备注……" spellcheck="false"></textarea>
 <button class="secondary-btn full" id="saveDayMemoBtn" type="submit">保存当天备忘</button>
 </form>
 </div>
@@ -197,9 +211,9 @@
 <button class="range-btn" data-range="custom">自定义</button>
 </div>
 <div class="custom-range" id="customRangeWrap">
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsStartDate" name="phd_statsStartDate_v133" type="date"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsStartDate" name="phd_statsStartDate_v134" type="date"/>
 <span>至</span>
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsEndDate" name="phd_statsEndDate_v133" type="date"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsEndDate" name="phd_statsEndDate_v134" type="date"/>
 <button class="secondary-btn" id="applyCustomRangeBtn">应用</button>
 </div>
 </div>
@@ -264,8 +278,8 @@
 <div class="memo-list" id="memoList"></div>
 </div>
 <form autocomplete="off" class="card memo-editor-card" id="memoForm" data-form-purpose="memo">
-<input autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-title-input" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoTitleInput" name="phd_memo_title_v133" placeholder="备忘录标题" spellcheck="false"/>
-<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-big-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoContentInput" name="phd_memo_content_v133" placeholder="写下待办、灵感、实验记录、论文思路……" spellcheck="false"></textarea>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-title-input" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoTitleInput" name="phd_memo_title_v134" placeholder="备忘录标题" spellcheck="false"/>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-big-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoContentInput" name="phd_memo_content_v134" placeholder="写下待办、灵感、实验记录、论文思路……" spellcheck="false"></textarea>
 <div class="memo-editor-actions">
 <button class="danger-btn" id="deleteMemoBtn" type="button">删除</button>
 <button class="primary-btn" id="saveMemoBtn" type="submit">保存</button>
@@ -284,11 +298,11 @@
 <div class="cloud-config-grid">
 <div class="form-group">
 <label for="supabaseUrlInput">Supabase Project URL</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseUrlInput" name="phd_supabaseUrlInput_v133" placeholder="https://xxxx.supabase.co" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseUrlInput" name="phd_supabaseUrlInput_v134" placeholder="https://xxxx.supabase.co" spellcheck="false"/>
 </div>
 <div class="form-group">
 <label for="supabaseKeyInput">Publishable / anon key</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseKeyInput" name="phd_supabaseKeyInput_v133" placeholder="sb_publishable_... 或 anon key" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseKeyInput" name="phd_supabaseKeyInput_v134" placeholder="sb_publishable_... 或 anon key" spellcheck="false"/>
 </div>
 </div>
 <div class="settings-actions">
@@ -336,7 +350,7 @@
 <div class="section-heading-row compact"><div><span class="eyebrow">Categories</span><h3>默认类别</h3></div></div>
 <div class="category-manager" id="categoryManager"></div>
 <form autocomplete="off" class="inline-form" id="categoryForm" data-form-purpose="category">
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newCategoryInput" name="phd_new_category_v133" placeholder="新增类别，如：会议" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newCategoryInput" name="phd_new_category_v134" placeholder="新增类别，如：会议" spellcheck="false"/>
 <button class="secondary-btn" id="addCategoryBtn" type="submit">添加</button>
 </form>
 </div>
@@ -345,7 +359,7 @@
 <p class="muted">用于把时间归属到某篇论文或某个科研项目。你也可以在记录窗口里直接输入新项目。</p>
 <div class="category-manager" id="projectManager"></div>
 <form autocomplete="off" class="inline-form" id="projectForm" data-form-purpose="project">
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newProjectInput" name="phd_new_project_v133" placeholder="例如：歧管微通道 Paper 1" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newProjectInput" name="phd_new_project_v134" placeholder="例如：歧管微通道 Paper 1" spellcheck="false"/>
 <button class="secondary-btn" id="addProjectBtn" type="submit">添加</button>
 </form>
 </div>
@@ -355,8 +369,8 @@
 <button class="danger-btn" id="clearAllBtn">清空全部数据</button>
 </div>
 <div class="card">
-<div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.3.3</h3></div></div>
-<p class="muted">当前版本 V1.3.3：账号/密码只在你主动打开登录窗口时临时存在；登录成功、取消或关闭后会从 DOM 中彻底移除。备忘录、计时器、活动记录、类别和项目均与登录表单结构隔离。</p>
+<div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.3.4</h3></div></div>
+<p class="muted">当前版本 V1.3.4：继续保持账号凭据与业务输入隔离，并在“今天”主页展示最近更新的独立备忘录；点击主页备忘录可直接进入对应内容继续编辑。</p>
 <p class="muted">云端不可用时自动回退到本地缓存；恢复网络后可继续同步。</p>
 </div>
 </div>
@@ -376,12 +390,12 @@
 <input id="activityId" type="hidden"/>
 <div class="form-group">
 <label for="activityTitle">做了什么</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTitle" name="phd_activityTitle_v133" placeholder="例如：COMSOL 冷板模拟" required="" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTitle" name="phd_activityTitle_v134" placeholder="例如：COMSOL 冷板模拟" required="" spellcheck="false"/>
 </div>
 <div class="form-row">
 <div class="form-group">
 <label for="activityDate">日期</label>
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityDate" name="phd_activityDate_v133" required="" type="date"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityDate" name="phd_activityDate_v134" required="" type="date"/>
 </div>
 <div class="form-group">
 <label for="activityCategory">类别</label>
@@ -390,27 +404,27 @@
 </div>
 <div class="form-group">
 <label for="activityProject">项目 / 论文</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityProject" list="projectDatalist" name="phd_activityProject_v133" placeholder="可选，例如：Paper 1 / 冷板项目" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityProject" list="projectDatalist" name="phd_activityProject_v134" placeholder="可选，例如：Paper 1 / 冷板项目" spellcheck="false"/>
 <div class="field-help">用于按论文或项目统计投入时间；输入新名称后会自动加入项目列表。</div>
 </div>
 <div class="form-row">
 <div class="form-group">
 <label for="activityStartTime">开始时间</label>
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityStartTime" name="phd_activityStartTime_v133" required="" type="time"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityStartTime" name="phd_activityStartTime_v134" required="" type="time"/>
 </div>
 <div class="form-group">
 <label for="activityEndTime">结束时间</label>
-<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityEndTime" name="phd_activityEndTime_v133" required="" type="time"/>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityEndTime" name="phd_activityEndTime_v134" required="" type="time"/>
 </div>
 </div>
 <div class="form-group">
 <label for="activityTags">标签</label>
-<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTags" name="phd_activityTags_v133" placeholder="输入多个标签，用逗号分隔，例如：COMSOL, 冷板, Paper1" spellcheck="false"/>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTags" name="phd_activityTags_v134" placeholder="输入多个标签，用逗号分隔，例如：COMSOL, 冷板, Paper1" spellcheck="false"/>
 <div class="field-help">支持自由创建标签；不需要提前设置。</div>
 </div>
 <div class="form-group">
 <label for="activityNote">备注</label>
-<textarea autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityNote" name="phd_activityNote_v133" placeholder="可选：实验参数、论文进展、下一步计划……" spellcheck="false"></textarea>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityNote" name="phd_activityNote_v134" placeholder="可选：实验参数、论文进展、下一步计划……" spellcheck="false"></textarea>
 </div>
 <div class="modal-actions">
 <button class="danger-btn hidden" id="deleteActivityBtn" type="button">删除</button>
@@ -424,8 +438,8 @@
 </div>
 <datalist id="projectDatalist"></datalist>
 <div class="toast" id="toast"></div>
-<script src="supabase-config.js?v=1.3.3"></script>
+<script src="supabase-config.js?v=1.3.4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
-<script src="app.js?v=1.3.3"></script>
+<script src="app.js?v=1.3.4"></script>
 </body>
 </html>

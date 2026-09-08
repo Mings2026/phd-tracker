@@ -342,3 +342,27 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   animation-duration: 0.001s;
   animation-iteration-count: 1;
 }
+
+/* V1.3.4: recent memos on Today dashboard */
+.today-memo-card { margin-top: 18px; }
+.today-memo-subtitle { margin: 5px 0 0; font-size: 12px; }
+.today-memo-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.today-memo-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.today-memo-item { display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 16px; text-align: left; background: linear-gradient(145deg,#ffffff 0%,#f8fafc 100%); border: 1px solid var(--line); border-radius: 14px; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.today-memo-item:hover { transform: translateY(-1px); border-color: #bfdbfe; box-shadow: 0 10px 24px rgba(15,23,42,.07); }
+.today-memo-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.today-memo-item-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.today-memo-item-head span { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.today-memo-item p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.today-memo-open { margin-top: auto; color: var(--primary); font-size: 11px; font-weight: 800; }
+.today-memo-empty { grid-column: 1 / -1; display: flex; align-items: center; gap: 13px; padding: 20px; border: 1px dashed #cbd5e1; border-radius: 14px; background: #f8fafc; color: var(--muted); }
+.today-memo-empty-icon { font-size: 28px; }
+.today-memo-empty strong { color: var(--text); display: block; margin-bottom: 4px; }
+.today-memo-empty p { margin: 0; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .today-memo-grid { grid-template-columns: 1fr; }
+  .today-memo-actions { width: 100%; justify-content: stretch; }
+  .today-memo-actions > * { flex: 1; }
+}
+
