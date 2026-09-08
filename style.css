@@ -291,11 +291,18 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   .modal-actions-right > * { flex: 1; }
 }
 
-/* V1.3.2: Supabase cloud sync */
+/* V1.3.3: Supabase cloud sync + credential isolation */
 .settings-wide { grid-column: 1 / -1; }
 .cloud-settings-card { overflow: hidden; }
 .cloud-config-grid, .cloud-auth-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
 .cloud-auth-panel { margin-top: 4px; }
+.cloud-login-callout { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0 2px; }
+.cloud-login-callout p { margin: 5px 0 0; max-width: 760px; }
+.auth-modal { width: min(500px,100%); }
+.auth-isolation-note { margin: -4px 0 18px; padding: 10px 12px; border: 1px solid #dbeafe; background: #eff6ff; border-radius: 10px; line-height: 1.6; }
+.auth-modal-actions { align-items: center; }
+.timer-form { margin: 0; }
+
 .cloud-user-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .cloud-user-row strong { display: block; margin-top: 3px; }
 .cloud-user-row small { display: block; color: var(--muted); margin-top: 5px; }
@@ -320,9 +327,12 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   .cloud-config-grid, .cloud-auth-grid { grid-template-columns: 1fr; }
   .cloud-user-row { align-items: flex-start; flex-direction: column; }
   .cloud-sync-actions > * { width: 100%; }
+  .cloud-login-callout { align-items: stretch; flex-direction: column; }
+  .cloud-login-callout .primary-btn { width: 100%; }
+  .auth-modal-actions { align-items: stretch; }
 }
 
-/* V1.3.2 — detect and reject browser/password-manager autofill on non-auth fields. */
+/* V1.3.3 — secondary autofill guard for non-auth fields. */
 @keyframes phdAutofillStart {
   from { opacity: 0.9999; }
   to { opacity: 1; }

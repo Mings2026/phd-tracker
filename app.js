@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.3.2';
+const APP_VERSION = '1.3.3';
 const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
 const CLOUD_TABLE = 'phd_tracker_state';
 const CLOUD_SYNC_DELAY_MS = 900;
@@ -53,13 +53,6 @@ function cacheElements() {
 }
 
 
-const EMAIL_LIKE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const HIGH_RISK_AUTOFILL_IDS = new Set([
-  'timerTitle', 'timerProject', 'timerTags',
-  'newCategoryInput', 'newProjectInput',
-  'activityTitle', 'activityProject', 'activityTags'
-]);
-
 function initAutofillGuard() {
   const protectedFields = document.querySelectorAll('[data-phd-no-autofill="true"]');
   protectedFields.forEach((field, index) => {
@@ -95,18 +88,13 @@ function sweepMisplacedAccountAutofill() {
 }
 
 function clearMisplacedAccountAutofill(field) {
-  if (!field || field.id === 'cloudEmailInput' || field.id === 'cloudPasswordInput') return;
-  if (!('value' in field)) return;
-  const value = String(field.value || '').trim();
-  if (!EMAIL_LIKE_RE.test(value)) return;
-
+  if (!field || !('value' in field)) return;
   let browserAutofilled = false;
   try { browserAutofilled = field.matches(':-webkit-autofill'); } catch {}
-  const authEmail = String(els.cloudEmailInput?.value || '').trim().toLowerCase();
-  const sameAsAuthEmail = !!authEmail && value.toLowerCase() === authEmail;
-  const highRiskField = HIGH_RISK_AUTOFILL_IDS.has(field.id);
-
-  if (browserAutofilled || (sameAsAuthEmail && highRiskField)) {
+  // V1.3.3: credential fields never coexist with normal app fields unless the
+  // user explicitly opens the auth modal. Any browser/password-manager autofill
+  // detected on a protected business field is therefore unwanted and is cleared.
+  if (browserAutofilled) {
     field.value = '';
     field.dispatchEvent(new Event('input', { bubbles: true }));
   }
@@ -138,7 +126,7 @@ function bindEvents() {
     renderCalendar();
   });
   els.addForSelectedDayBtn.addEventListener('click', () => openActivityModal({ date: state.selectedCalendarDate }));
-  els.saveDayMemoBtn.addEventListener('click', saveDayMemo);
+  els.dayMemoForm?.addEventListener('submit', e => { e.preventDefault(); saveDayMemo(); });
 
   document.querySelectorAll('.range-btn').forEach(btn => btn.addEventListener('click', () => setStatsRange(btn.dataset.range)));
   els.applyCustomRangeBtn.addEventListener('click', applyCustomStatsRange);
@@ -149,22 +137,20 @@ function bindEvents() {
   });
 
   els.newMemoBtn.addEventListener('click', newMemo);
-  els.saveMemoBtn.addEventListener('click', saveMemo);
+  els.memoForm?.addEventListener('submit', e => { e.preventDefault(); saveMemo(); });
   els.deleteMemoBtn.addEventListener('click', deleteMemo);
+  els.timerForm?.addEventListener('submit', e => e.preventDefault());
 
   els.exportBtn.addEventListener('click', exportData);
   els.importInput.addEventListener('change', importData);
-  els.addCategoryBtn.addEventListener('click', addCategory);
-  els.newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(); });
-  els.addProjectBtn.addEventListener('click', addProject);
-  els.newProjectInput.addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); });
+  els.categoryForm?.addEventListener('submit', e => { e.preventDefault(); addCategory(); });
+  els.projectForm?.addEventListener('submit', e => { e.preventDefault(); addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
-  // V1.3.2 Supabase cloud sync + non-auth autofill guard
+  // V1.3.3 Supabase cloud sync + credential isolation
   els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
   els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
-  els.cloudLoginBtn?.addEventListener('click', cloudLogin);
-  els.cloudSignupBtn?.addEventListener('click', cloudSignup);
+  els.openCloudAuthBtn?.addEventListener('click', openCloudAuthModal);
   els.cloudLogoutBtn?.addEventListener('click', cloudLogout);
   els.cloudSyncNowBtn?.addEventListener('click', () => syncCloudBidirectional({ manual: true }));
   els.cloudUploadBtn?.addEventListener('click', forceUploadLocalToCloud);
@@ -845,7 +831,7 @@ function clearTimerInputs() {
 
 
 // ------------------------------
-// V1.3.2 Supabase cloud sync - mobile auth hardened
+// V1.3.3 Supabase cloud sync - credential isolation + mobile auth hardened
 // ------------------------------
 class CloudTimeoutError extends Error {
   constructor(label, ms) {
@@ -862,6 +848,83 @@ function withCloudTimeout(promise, ms, label) {
   });
   return Promise.race([Promise.resolve(promise), timeoutPromise])
     .finally(() => clearTimeout(timerId));
+}
+
+function openCloudAuthModal() {
+  if (state.cloud.user) {
+    toast('当前已经登录云端账号');
+    return;
+  }
+  if (document.getElementById('cloudAuthModalBackdrop')) return;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop show';
+  backdrop.id = 'cloudAuthModalBackdrop';
+  backdrop.innerHTML = `
+    <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="cloudAuthModalTitle">
+      <div class="modal-header">
+        <div>
+          <span class="eyebrow">Cloud Account</span>
+          <h2 id="cloudAuthModalTitle">登录 / 注册</h2>
+        </div>
+        <button class="icon-btn" id="closeCloudAuthModalBtn" type="button" aria-label="关闭">✕</button>
+      </div>
+      <p class="muted auth-isolation-note">此窗口关闭或登录成功后，邮箱和密码输入框会立即从网页中移除，避免浏览器把备忘录、标签等误识别为账号字段。</p>
+      <form id="cloudAuthForm" autocomplete="on" data-form-purpose="authentication">
+        <div class="form-group">
+          <label for="cloudEmailInput">邮箱</label>
+          <input id="cloudEmailInput" name="username" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label for="cloudPasswordInput">密码</label>
+          <input id="cloudPasswordInput" name="password" type="password" autocomplete="current-password" placeholder="至少 6 位" required />
+        </div>
+        <div class="modal-actions auth-modal-actions">
+          <button class="secondary-btn" id="cloudSignupBtn" type="button">注册账号</button>
+          <div class="modal-actions-right">
+            <button class="secondary-btn" id="cancelCloudAuthBtn" type="button">取消</button>
+            <button class="primary-btn" id="cloudLoginBtn" type="submit">登录并同步</button>
+          </div>
+        </div>
+      </form>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+  ['cloudAuthModalBackdrop','closeCloudAuthModalBtn','cloudAuthForm','cloudEmailInput','cloudPasswordInput','cloudSignupBtn','cancelCloudAuthBtn','cloudLoginBtn']
+    .forEach(id => { els[id] = document.getElementById(id); });
+
+  els.closeCloudAuthModalBtn?.addEventListener('click', closeCloudAuthModal);
+  els.cancelCloudAuthBtn?.addEventListener('click', closeCloudAuthModal);
+  els.cloudAuthForm?.addEventListener('submit', e => { e.preventDefault(); cloudLogin(); });
+  els.cloudSignupBtn?.addEventListener('click', cloudSignup);
+  els.cloudAuthModalBackdrop?.addEventListener('click', e => {
+    if (e.target === els.cloudAuthModalBackdrop && !state.cloud.authBusy) closeCloudAuthModal();
+  });
+  const escapeHandler = e => {
+    if (e.key === 'Escape' && !state.cloud.authBusy) closeCloudAuthModal();
+  };
+  backdrop._escapeHandler = escapeHandler;
+  document.addEventListener('keydown', escapeHandler);
+  setTimeout(() => els.cloudEmailInput?.focus(), 0);
+}
+
+function closeCloudAuthModal() {
+  const backdrop = document.getElementById('cloudAuthModalBackdrop');
+  if (!backdrop) return;
+  if (backdrop._escapeHandler) document.removeEventListener('keydown', backdrop._escapeHandler);
+  // Blank credentials before removal so they are not retained in a detached node.
+  if (els.cloudPasswordInput) els.cloudPasswordInput.value = '';
+  if (els.cloudEmailInput) els.cloudEmailInput.value = '';
+  backdrop.remove();
+  ['cloudAuthModalBackdrop','closeCloudAuthModalBtn','cloudAuthForm','cloudEmailInput','cloudPasswordInput','cloudSignupBtn','cancelCloudAuthBtn','cloudLoginBtn']
+    .forEach(id => { delete els[id]; });
+  state.cloud.authBusy = false;
+}
+
+function getCloudAuthCredentials() {
+  const email = String(document.getElementById('cloudEmailInput')?.value || '').trim();
+  const password = document.getElementById('cloudPasswordInput')?.value || '';
+  return { email, password };
 }
 
 function setCloudAuthBusy(busy, action = '') {
@@ -890,7 +953,7 @@ function cleanupCloudClientRuntime() {
 
 function newSupabaseClient(config) {
   if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
-  // V1.3.2 continues to pin the lockless Supabase JS release. No custom navigator lock is used.
+  // V1.3.3 keeps the pinned Supabase JS release and isolates credential fields in an ephemeral modal.
   return window.supabase.createClient(config.url, config.key, {
     auth: {
       persistSession: true,
@@ -992,6 +1055,7 @@ function renderCloudUI() {
   }
   if (els.cloudLoggedOutPanel) els.cloudLoggedOutPanel.classList.toggle('hidden', !!state.cloud.user);
   if (els.cloudLoggedInPanel) els.cloudLoggedInPanel.classList.toggle('hidden', !state.cloud.user);
+  if (state.cloud.user && document.getElementById('cloudAuthModalBackdrop')) closeCloudAuthModal();
   if (els.cloudUserEmail) els.cloudUserEmail.textContent = state.cloud.user?.email || '—';
   if (els.cloudLastSyncText) {
     const iso = state.data?.meta?.lastCloudSyncedAt;
@@ -1041,7 +1105,7 @@ async function createCloudClient(config) {
       // Crucially, do not block the whole app on mobile if getSession never resolves.
       state.cloud.user = null;
       renderCloudUI();
-      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.2 会自动重试。', 'error');
+      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.3 会自动重试。', 'error');
       return;
     }
     throw err;
@@ -1115,8 +1179,7 @@ async function ensureCloudClient() {
 async function cloudSignup() {
   if (state.cloud.authBusy) return;
   if (!await ensureCloudClient()) return;
-  const email = (els.cloudEmailInput?.value || '').trim();
-  const password = els.cloudPasswordInput?.value || '';
+  const { email, password } = getCloudAuthCredentials();
   if (!email || password.length < 6) return toast('请输入邮箱和至少 6 位密码');
   setCloudAuthBusy(true, 'signup');
   try {
@@ -1137,11 +1200,13 @@ async function cloudSignup() {
       try {
         await withCloudTimeout(syncCloudBidirectional({ silent: true }), CLOUD_SYNC_TIMEOUT_MS, '首次云端同步');
         setCloudMessage('注册并登录成功，云端同步正常。', 'success');
+        closeCloudAuthModal();
       } catch (syncErr) {
         setCloudMessage(`账号已注册并登录，但首次同步未完成：${friendlyCloudError(syncErr)}。可稍后点击“立即双向同步”。`, 'error');
       }
     } else {
       setCloudMessage('注册成功。请到邮箱点击 Supabase 的确认链接，然后回到本页登录。', 'success');
+      closeCloudAuthModal();
     }
   } catch (err) {
     if (err?.isCloudTimeout) {
@@ -1159,8 +1224,7 @@ async function cloudSignup() {
 async function cloudLogin() {
   if (state.cloud.authBusy) return;
   if (!await ensureCloudClient()) return;
-  const email = (els.cloudEmailInput?.value || '').trim();
-  const password = els.cloudPasswordInput?.value || '';
+  const { email, password } = getCloudAuthCredentials();
   if (!email || !password) return toast('请输入邮箱和密码');
   setCloudAuthBusy(true, 'login');
   let retried = false;
@@ -1221,6 +1285,7 @@ async function cloudLogin() {
 }
 
 async function cloudLogout() {
+  closeCloudAuthModal();
   if (!state.cloud.client) return;
   try {
     await withCloudTimeout(state.cloud.client.auth.signOut(), CLOUD_AUTH_TIMEOUT_MS, '退出登录');

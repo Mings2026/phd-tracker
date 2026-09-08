@@ -1,9 +1,9 @@
 {
-  "name": "PhD Tracker V1.3.2",
+  "name": "PhD Tracker V1.3.3",
   "short_name": "PhD Tracker",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f4f7fb",
   "theme_color": "#0f172a",
-  "description": "PhD Tracker V1.3.2：保留 Supabase 多设备同步与手机端登录修复，并加强所有非账号字段的防浏览器/密码管理器自动填充。"
+  "description": "PhD Tracker V1.3.3：保留 Supabase 多设备同步与手机端登录修复，并加强所有非账号字段的防浏览器/密码管理器自动填充。"
 }
