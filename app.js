@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.3.2';
 const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
 const CLOUD_TABLE = 'phd_tracker_state';
 const CLOUD_SYNC_DELAY_MS = 900;
@@ -36,18 +36,80 @@ document.addEventListener('DOMContentLoaded', init);
 
 function init() {
   cacheElements();
+  initAutofillGuard();
   bindEvents();
   ensureDefaults();
   populateCategorySelect();
   populateTimerCategorySelect();
   populateProjectDatalist();
   renderAll();
+  scheduleAutofillSweep();
   startTimerTicker();
   initCloud().catch(err => { console.error(err); setCloudMessage('云同步初始化失败，当前继续使用本地模式。', 'error'); });
 }
 
 function cacheElements() {
   document.querySelectorAll('[id]').forEach(el => { els[el.id] = el; });
+}
+
+
+const EMAIL_LIKE_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const HIGH_RISK_AUTOFILL_IDS = new Set([
+  'timerTitle', 'timerProject', 'timerTags',
+  'newCategoryInput', 'newProjectInput',
+  'activityTitle', 'activityProject', 'activityTags'
+]);
+
+function initAutofillGuard() {
+  const protectedFields = document.querySelectorAll('[data-phd-no-autofill="true"]');
+  protectedFields.forEach((field, index) => {
+    field.setAttribute('autocomplete', 'off');
+    field.setAttribute('data-lpignore', 'true');
+    field.setAttribute('data-1p-ignore', 'true');
+    field.setAttribute('data-bwignore', 'true');
+    if (!field.getAttribute('name') && field.id) field.setAttribute('name', `phd_${field.id}_${APP_VERSION.replaceAll('.', '_')}_${index}`);
+  });
+
+  // WebKit/Chrome expose :-webkit-autofill when a browser or password manager
+  // inserts a value. Clear only clearly misplaced email values in non-auth fields.
+  document.addEventListener('animationstart', event => {
+    if (event.animationName === 'phdAutofillStart') clearMisplacedAccountAutofill(event.target);
+  }, true);
+
+  document.addEventListener('focusin', event => {
+    const field = event.target;
+    if (field?.matches?.('[data-phd-no-autofill="true"]')) {
+      setTimeout(() => clearMisplacedAccountAutofill(field), 0);
+    }
+  }, true);
+
+  window.addEventListener('pageshow', () => scheduleAutofillSweep());
+}
+
+function scheduleAutofillSweep() {
+  [40, 250, 900, 1800].forEach(delay => setTimeout(sweepMisplacedAccountAutofill, delay));
+}
+
+function sweepMisplacedAccountAutofill() {
+  document.querySelectorAll('[data-phd-no-autofill="true"]').forEach(clearMisplacedAccountAutofill);
+}
+
+function clearMisplacedAccountAutofill(field) {
+  if (!field || field.id === 'cloudEmailInput' || field.id === 'cloudPasswordInput') return;
+  if (!('value' in field)) return;
+  const value = String(field.value || '').trim();
+  if (!EMAIL_LIKE_RE.test(value)) return;
+
+  let browserAutofilled = false;
+  try { browserAutofilled = field.matches(':-webkit-autofill'); } catch {}
+  const authEmail = String(els.cloudEmailInput?.value || '').trim().toLowerCase();
+  const sameAsAuthEmail = !!authEmail && value.toLowerCase() === authEmail;
+  const highRiskField = HIGH_RISK_AUTOFILL_IDS.has(field.id);
+
+  if (browserAutofilled || (sameAsAuthEmail && highRiskField)) {
+    field.value = '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 }
 
 function bindEvents() {
@@ -98,7 +160,7 @@ function bindEvents() {
   els.newProjectInput.addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
-  // V1.3.1 Supabase cloud sync (mobile auth hardened)
+  // V1.3.2 Supabase cloud sync + non-auth autofill guard
   els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
   els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
   els.cloudLoginBtn?.addEventListener('click', cloudLogin);
@@ -783,7 +845,7 @@ function clearTimerInputs() {
 
 
 // ------------------------------
-// V1.3.1 Supabase cloud sync - mobile auth hardened
+// V1.3.2 Supabase cloud sync - mobile auth hardened
 // ------------------------------
 class CloudTimeoutError extends Error {
   constructor(label, ms) {
@@ -828,7 +890,7 @@ function cleanupCloudClientRuntime() {
 
 function newSupabaseClient(config) {
   if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
-  // V1.3.1 pins a lockless Supabase JS release. No custom navigator lock is used.
+  // V1.3.2 continues to pin the lockless Supabase JS release. No custom navigator lock is used.
   return window.supabase.createClient(config.url, config.key, {
     auth: {
       persistSession: true,
@@ -979,7 +1041,7 @@ async function createCloudClient(config) {
       // Crucially, do not block the whole app on mobile if getSession never resolves.
       state.cloud.user = null;
       renderCloudUI();
-      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.1 会自动重试。', 'error');
+      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.2 会自动重试。', 'error');
       return;
     }
     throw err;

@@ -291,7 +291,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   .modal-actions-right > * { flex: 1; }
 }
 
-/* V1.3.1: Supabase cloud sync */
+/* V1.3.2: Supabase cloud sync */
 .settings-wide { grid-column: 1 / -1; }
 .cloud-settings-card { overflow: hidden; }
 .cloud-config-grid, .cloud-auth-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
@@ -320,4 +320,15 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #bfdbfe; border-c
   .cloud-config-grid, .cloud-auth-grid { grid-template-columns: 1fr; }
   .cloud-user-row { align-items: flex-start; flex-direction: column; }
   .cloud-sync-actions > * { width: 100%; }
+}
+
+/* V1.3.2 — detect and reject browser/password-manager autofill on non-auth fields. */
+@keyframes phdAutofillStart {
+  from { opacity: 0.9999; }
+  to { opacity: 1; }
+}
+[data-phd-no-autofill="true"]:-webkit-autofill {
+  animation-name: phdAutofillStart;
+  animation-duration: 0.001s;
+  animation-iteration-count: 1;
 }

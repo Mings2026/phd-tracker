@@ -1,4 +1,4 @@
--- PhD Tracker V1.3.1-compatible - Supabase database setup (schema unchanged from V1.3)
+-- PhD Tracker V1.3.2-compatible - Supabase database setup (schema unchanged from V1.3)
 -- Run this entire script once in Supabase Dashboard > SQL Editor.
 
 create table if not exists public.phd_tracker_state (

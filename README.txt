@@ -1,31 +1,45 @@
-PhD Tracker V1.3.1
+PhD Tracker V1.3.2
 ===================
 
-本版本专门修复 V1.3 在部分手机浏览器中 Supabase 登录长期停留在“正在登录”的问题。
+本版目的
+--------
+修复 Chrome / Safari / 密码管理器把登录邮箱误填到“实时计时器标签、项目、任务”等非账号字段的问题，同时完整保留 V1.3.1 的 Supabase 多设备同步与手机端登录修复。
 
-V1.3.1 修复内容
-----------------
-1. Supabase JS 从浮动 @2 改为固定版本 2.112.2，避免 CDN 自动升级导致行为变化。
-2. 账号登录增加 15 秒超时保护，任何情况下都不会无限显示“正在登录”。
-3. 手机端首次登录超时时，会自动重建 Supabase 客户端并重试一次。
-4. 将“账号验证”和“云端数据同步”拆成两个状态：登录成功后即明确显示账号已登录；即使同步较慢，也不会误显示为还在登录。
-5. 登录状态检查增加 8 秒超时；Safari/Chrome 恢复后台页面时进行非阻塞会话检查。
-6. 云端首次同步增加 20 秒保护；超时后仍保留已登录状态和本地数据，可手动“立即双向同步”。
-7. 连接测试改为实际请求 Supabase Auth 设置接口，并带 10 秒超时。
+V1.3.2 新增修复
+---------------
+1. 所有非账号输入字段统一加入 autocomplete="off"。
+2. 为非账号字段使用独立字段名，降低浏览器把它们识别为账号字段的概率。
+3. 对任务、项目、标签、新建类别、新建项目、备忘录、日期/时间、Supabase 配置等字段加入：
+   - data-lpignore="true"（LastPass）
+   - data-1p-ignore="true"（1Password）
+   - data-bwignore="true"（Bitwarden）
+4. 增加 WebKit / Chrome autofill 检测。如果浏览器仍把邮箱误填到任务、项目、标签等高风险字段，会自动清除该误填值。
+5. “正在做什么 / 项目 / 标签 / 新建类别 / 新建项目 / 备忘录 / 添加时间记录”等非账号文本框同时关闭 autocorrect、autocapitalize 和 spellcheck，减少移动端输入干扰。
+6. 真正的登录邮箱与密码仍保留：
+   - autocomplete="email"
+   - autocomplete="current-password"
+   因此 Chrome / Safari / 密码管理器仍可正常帮你填写真正的登录账号。
 
-数据与 Supabase 兼容
--------------------
-- 数据表仍为 public.phd_tracker_state。
-- localStorage 数据键仍为 phdTrackerV1。
+保留的 V1.3.1 功能
+-----------------
+- Supabase JS 固定版本与手机端登录超时保护。
+- 手机端登录失败自动恢复，不再无限停留“正在登录”。
+- 本地缓存 + Supabase 多设备同步。
+- 实时计时器、年度科研热力图、项目/论文统计、日历、备忘录。
+
+数据兼容
+--------
+- localStorage 键仍为 phdTrackerV1。
 - Supabase 配置键仍为 phdTrackerSupabaseConfigV1。
-- V1.3 已有云端记录、账号、密码和 RLS 规则全部继续使用。
+- 云端表仍为 public.phd_tracker_state。
 - 不需要重新创建 Supabase Project。
-- 不需要重新运行 supabase_setup.sql（除非你之前从未运行成功）。
+- 不需要重新运行 supabase_setup.sql（除非之前没有成功执行）。
 - 不需要重新注册账号。
+- V1.3 / V1.3.1 已有本地和云端数据保持兼容。
 
 GitHub Pages 升级
 -----------------
-解压 V1.3.1 后，将以下文件上传并覆盖 GitHub 仓库根目录的同名文件：
+将以下文件上传到 GitHub 仓库根目录并覆盖同名文件：
   index.html
   app.js
   style.css
@@ -33,8 +47,10 @@ GitHub Pages 升级
   README.txt
   supabase-config.js
 
-然后 Commit changes。原 GitHub Pages 地址保持不变。等待部署完成后，在手机和电脑上重新打开网页；如仍显示旧版本，请强制刷新或清除此站点的网页缓存。
+然后点击 Commit changes。GitHub Pages 地址保持不变。
+部署完成后建议手机端彻底关闭旧页面后重新打开；若还显示旧版本，可清除此网站缓存后重试。
 
 安全说明
 --------
-继续只使用 Supabase Publishable key / anon key。绝对不要把 Secret key 或 service_role key 放到前端。
+浏览器前端只使用 Supabase Publishable key / anon key。
+绝对不要把 Secret key 或 service_role key 放到 GitHub Pages 前端。

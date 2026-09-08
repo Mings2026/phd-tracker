@@ -1,458 +1,434 @@
 <!DOCTYPE html>
+
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>PhD Tracker V1.3.1</title>
-  <link rel="stylesheet" href="style.css?v=1.3.1" />
-  <link rel="manifest" href="manifest.json?v=1.3.1" />
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="#0f172a" name="theme-color"/>
+<title>PhD Tracker V1.3.2</title>
+<link href="style.css?v=1.3.2" rel="stylesheet"/>
+<link href="manifest.json?v=1.3.2" rel="manifest"/>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">P</div>
-        <div>
-          <div class="brand-title">PhD Tracker</div>
-          <div class="brand-subtitle">Research Dashboard · V1.3.1</div>
-        </div>
-      </div>
-
-      <nav class="nav-list" id="navList">
-        <button class="nav-item active" data-page="today">🏠 <span>今天</span></button>
-        <button class="nav-item" data-page="calendar">📅 <span>日历</span></button>
-        <button class="nav-item" data-page="stats">📊 <span>统计</span></button>
-        <button class="nav-item" data-page="memo">📝 <span>备忘录</span></button>
-        <button class="nav-item" data-page="settings">⚙️ <span>设置</span></button>
-      </nav>
-
-      <div class="sidebar-footer">
-        <div class="cloud-mini-status" id="cloudMiniStatus"><span class="cloud-dot local"></span><span>本地模式</span></div>
-        <div class="footer-note">V1.3.1 支持 Supabase 云同步；已加强手机端登录稳定性。</div>
-        <button class="secondary-btn full" id="quickExportBtn">导出备份</button>
-      </div>
-    </aside>
-
-    <main class="main-content">
-      <header class="topbar">
-        <div>
-          <h1 id="pageTitle">今天</h1>
-          <p id="pageSubtitle" class="muted"></p>
-        </div>
-        <div class="topbar-actions">
-          <button class="secondary-btn" id="jumpTodayBtn">回到今天</button>
-          <button class="primary-btn" id="addActivityBtn">＋ 添加记录</button>
-        </div>
-      </header>
-
-      <section class="page active" id="page-today">
-        <div class="grid-two">
-          <div class="card hero-card">
-            <div class="section-heading-row">
-              <div>
-                <span class="eyebrow">今日概览</span>
-                <h2 id="todayDateHeading">—</h2>
-              </div>
-              <div class="metric-block">
-                <span class="metric-label">已记录</span>
-                <strong id="todayTotalTime">0h 00m</strong>
-              </div>
-            </div>
-            <div class="quick-entry-grid">
-              <button type="button" class="quick-chip" data-quick-title="建模仿真" data-quick-category="科研">建模仿真</button>
-              <button type="button" class="quick-chip" data-quick-title="阅读论文" data-quick-category="科研">阅读论文</button>
-              <button type="button" class="quick-chip" data-quick-title="论文写作" data-quick-category="科研">论文写作</button>
-              <button type="button" class="quick-chip" data-quick-title="数据处理" data-quick-category="科研">数据处理</button>
-              <button type="button" class="quick-chip" data-quick-title="实验测试" data-quick-category="科研">实验测试</button>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="section-heading-row compact">
-              <div>
-                <span class="eyebrow">今日分类</span>
-                <h3>时间分配</h3>
-              </div>
-            </div>
-            <div id="todayCategorySummary" class="summary-list"></div>
-          </div>
-        </div>
-
-        <div class="card timer-card">
-          <div class="section-heading-row">
-            <div>
-              <span class="eyebrow">Focus Timer</span>
-              <h2>实时计时器</h2>
-            </div>
-            <div class="timer-status" id="timerStatus">未开始</div>
-          </div>
-          <div class="timer-layout">
-            <div class="timer-display-wrap">
-              <div class="timer-display" id="timerDisplay">00:00:00</div>
-              <div class="timer-started-at" id="timerStartedAt">填写任务后点击开始，停止时会自动保存为时间记录。</div>
-            </div>
-            <div class="timer-fields">
-              <div class="timer-field timer-field-wide">
-                <label for="timerTitle">正在做什么</label>
-                <input id="timerTitle" placeholder="例如：COMSOL 冷板仿真" />
-              </div>
-              <div class="timer-field">
-                <label for="timerCategory">类别</label>
-                <select id="timerCategory" aria-label="计时类别">
-                  <option value="科研">科研</option>
-                  <option value="学习">学习</option>
-                  <option value="会议">会议</option>
-                  <option value="生活">生活</option>
-                  <option value="运动">运动</option>
-                  <option value="娱乐">娱乐</option>
-                </select>
-              </div>
-              <div class="timer-field">
-                <label for="timerProject">项目 / 论文</label>
-                <input id="timerProject" list="projectDatalist" placeholder="例如：Paper 1" />
-              </div>
-              <div class="timer-field timer-field-wide">
-                <label for="timerTags">标签</label>
-                <input id="timerTags" placeholder="COMSOL, 冷板, 仿真" />
-              </div>
-            </div>
-          </div>
-          <div class="timer-actions">
-            <button type="button" class="primary-btn" id="timerStartBtn">▶ 开始计时</button>
-            <button type="button" class="secondary-btn hidden" id="timerPauseBtn">暂停</button>
-            <button type="button" class="primary-btn hidden" id="timerResumeBtn">继续</button>
-            <button type="button" class="secondary-btn hidden" id="timerStopBtn">■ 停止并保存</button>
-            <button type="button" class="danger-btn hidden" id="timerCancelBtn">放弃计时</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="section-heading-row">
-            <div>
-              <span class="eyebrow">Timeline</span>
-              <h2>今日时间轴</h2>
-            </div>
-            <div class="date-controls">
-              <button class="icon-btn" id="prevDayBtn" aria-label="前一天">←</button>
-              <input type="date" id="todayDatePicker" />
-              <button class="icon-btn" id="nextDayBtn" aria-label="后一天">→</button>
-            </div>
-          </div>
-          <div id="timeline" class="timeline"></div>
-        </div>
-      </section>
-
-      <section class="page" id="page-calendar">
-        <div class="calendar-layout">
-          <div class="card calendar-card">
-            <div class="section-heading-row">
-              <div>
-                <span class="eyebrow">Calendar</span>
-                <h2 id="calendarMonthLabel">—</h2>
-              </div>
-              <div class="date-controls">
-                <button class="icon-btn" id="prevMonthBtn">←</button>
-                <button class="secondary-btn" id="calendarTodayBtn">今天</button>
-                <button class="icon-btn" id="nextMonthBtn">→</button>
-              </div>
-            </div>
-            <div class="calendar-weekdays">
-              <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
-            </div>
-            <div id="calendarGrid" class="calendar-grid"></div>
-          </div>
-
-          <div class="card day-detail-card">
-            <div class="section-heading-row compact">
-              <div>
-                <span class="eyebrow">Selected Day</span>
-                <h3 id="selectedDayLabel">—</h3>
-              </div>
-              <button class="primary-btn small" id="addForSelectedDayBtn">＋记录</button>
-            </div>
-            <div id="selectedDayStats" class="mini-stats"></div>
-            <div id="selectedDayActivities" class="compact-list"></div>
-            <div class="divider"></div>
-            <div class="section-heading-row compact">
-              <div>
-                <span class="eyebrow">Memo</span>
-                <h3>当天备忘</h3>
-              </div>
-            </div>
-            <textarea id="selectedDayMemo" class="memo-textarea" placeholder="记录当天待办、实验想法、论文备注……"></textarea>
-            <button class="secondary-btn full" id="saveDayMemoBtn">保存当天备忘</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-stats">
-        <div class="card stats-filter-card">
-          <div class="section-heading-row">
-            <div>
-              <span class="eyebrow">Analytics</span>
-              <h2>时间统计</h2>
-            </div>
-          </div>
-          <div class="range-buttons" id="rangeButtons">
-            <button class="range-btn active" data-range="7">近7天</button>
-            <button class="range-btn" data-range="30">近30天</button>
-            <button class="range-btn" data-range="90">近90天</button>
-            <button class="range-btn" data-range="365">近1年</button>
-            <button class="range-btn" data-range="custom">自定义</button>
-          </div>
-          <div class="custom-range" id="customRangeWrap">
-            <input type="date" id="statsStartDate" />
-            <span>至</span>
-            <input type="date" id="statsEndDate" />
-            <button class="secondary-btn" id="applyCustomRangeBtn">应用</button>
-          </div>
-        </div>
-
-        <div class="stats-cards">
-          <div class="metric-card"><span>总记录时间</span><strong id="statsTotalTime">0h 00m</strong></div>
-          <div class="metric-card"><span>记录条数</span><strong id="statsRecordCount">0</strong></div>
-          <div class="metric-card"><span>日均时间</span><strong id="statsDailyAvg">0h 00m</strong></div>
-          <div class="metric-card"><span>最高投入日</span><strong id="statsBestDay">—</strong></div>
-        </div>
-
-        <div class="grid-two stats-grid">
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Category</span><h3>类别统计</h3></div></div>
-            <div id="categoryStats" class="bar-list"></div>
-          </div>
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Tags</span><h3>标签统计</h3></div></div>
-            <div id="tagStats" class="tag-stat-grid"></div>
-          </div>
-        </div>
-
-        <div class="card heatmap-card">
-          <div class="section-heading-row">
-            <div>
-              <span class="eyebrow">Research Heatmap</span>
-              <h3>年度科研热力图</h3>
-            </div>
-            <div class="date-controls">
-              <button class="icon-btn" id="heatmapPrevYearBtn">←</button>
-              <strong id="heatmapYearLabel">—</strong>
-              <button class="icon-btn" id="heatmapNextYearBtn">→</button>
-            </div>
-          </div>
-          <div class="heatmap-summary" id="heatmapSummary"></div>
-          <div class="heatmap-scroll">
-            <div class="heatmap-shell">
-              <div class="heatmap-week-labels"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div>
-              <div>
-                <div class="heatmap-months" id="heatmapMonths"></div>
-                <div class="heatmap-grid" id="researchHeatmap"></div>
-              </div>
-            </div>
-          </div>
-          <div class="heatmap-legend"><span>少</span><i class="heat-0"></i><i class="heat-1"></i><i class="heat-2"></i><i class="heat-3"></i><i class="heat-4"></i><span>多</span><span class="heatmap-note">仅统计“科研”类别</span></div>
-        </div>
-
-        <div class="card project-stats-card">
-          <div class="section-heading-row compact">
-            <div><span class="eyebrow">Projects & Papers</span><h3>项目 / 论文维度统计</h3></div>
-          </div>
-          <div id="projectStats" class="project-stat-grid"></div>
-        </div>
-
-        <div class="card">
-          <div class="section-heading-row compact"><div><span class="eyebrow">Trend</span><h3>每日投入趋势</h3></div></div>
-          <div id="trendChart" class="trend-chart"></div>
-        </div>
-      </section>
-
-      <section class="page" id="page-memo">
-        <div class="memo-layout">
-          <div class="card">
-            <div class="section-heading-row">
-              <div><span class="eyebrow">Memo</span><h2>备忘录</h2></div>
-              <button class="primary-btn" id="newMemoBtn">＋ 新建</button>
-            </div>
-            <div id="memoList" class="memo-list"></div>
-          </div>
-          <div class="card memo-editor-card">
-            <input id="memoTitleInput" class="memo-title-input" placeholder="备忘录标题" />
-            <textarea id="memoContentInput" class="memo-big-textarea" placeholder="写下待办、灵感、实验记录、论文思路……"></textarea>
-            <div class="memo-editor-actions">
-              <button class="danger-btn" id="deleteMemoBtn">删除</button>
-              <button class="primary-btn" id="saveMemoBtn">保存</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="page" id="page-settings">
-        <div class="settings-grid">
-          <div class="card cloud-settings-card settings-wide">
-            <div class="section-heading-row">
-              <div><span class="eyebrow">Cloud Sync</span><h3>Supabase 多设备同步</h3></div>
-              <div class="cloud-badge local" id="cloudStatusBadge">本地模式</div>
-            </div>
-            <p class="muted">登录同一个账号后，电脑、手机和不同浏览器可以共享同一份 PhD Tracker 数据。本地缓存仍会保留。</p>
-
-            <div class="cloud-config-grid">
-              <div class="form-group">
-                <label for="supabaseUrlInput">Supabase Project URL</label>
-                <input id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" autocomplete="off" />
-              </div>
-              <div class="form-group">
-                <label for="supabaseKeyInput">Publishable / anon key</label>
-                <input id="supabaseKeyInput" placeholder="sb_publishable_... 或 anon key" autocomplete="off" />
-              </div>
-            </div>
-            <div class="settings-actions">
-              <button class="secondary-btn" id="saveCloudConfigBtn">保存云端连接</button>
-              <button class="secondary-btn" id="testCloudConfigBtn">测试连接</button>
-            </div>
-
-            <div class="cloud-auth-panel" id="cloudLoggedOutPanel">
-              <div class="divider"></div>
-              <div class="cloud-auth-grid">
-                <div class="form-group">
-                  <label for="cloudEmailInput">邮箱</label>
-                  <input type="email" id="cloudEmailInput" placeholder="you@example.com" autocomplete="email" />
-                </div>
-                <div class="form-group">
-                  <label for="cloudPasswordInput">密码</label>
-                  <input type="password" id="cloudPasswordInput" placeholder="至少 6 位" autocomplete="current-password" />
-                </div>
-              </div>
-              <div class="settings-actions">
-                <button class="primary-btn" id="cloudLoginBtn">登录并同步</button>
-                <button class="secondary-btn" id="cloudSignupBtn">注册账号</button>
-              </div>
-            </div>
-
-            <div class="cloud-auth-panel hidden" id="cloudLoggedInPanel">
-              <div class="divider"></div>
-              <div class="cloud-user-row">
-                <div>
-                  <span class="muted">当前云端账号</span>
-                  <strong id="cloudUserEmail">—</strong>
-                  <small id="cloudLastSyncText">尚未同步</small>
-                </div>
-                <button class="secondary-btn" id="cloudLogoutBtn">退出登录</button>
-              </div>
-              <div class="settings-actions cloud-sync-actions">
-                <button class="primary-btn" id="cloudSyncNowBtn">↻ 立即双向同步</button>
-                <button class="secondary-btn" id="cloudUploadBtn">上传本机数据</button>
-                <button class="secondary-btn" id="cloudDownloadBtn">下载云端数据</button>
-              </div>
-              <p class="field-help">正常使用时会自动同步。“上传本机数据”和“下载云端数据”仅用于手动覆盖恢复，点击前会再次确认。</p>
-            </div>
-            <div class="cloud-message" id="cloudMessage">尚未配置 Supabase。你仍可继续使用本地模式。</div>
-          </div>
-
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Data</span><h3>数据备份</h3></div></div>
-            <p class="muted">建议定期导出备份文件。导入会与当前数据合并。</p>
-            <div class="settings-actions">
-              <button class="primary-btn" id="exportBtn">导出全部数据</button>
-              <label class="secondary-btn file-label">导入备份<input type="file" id="importInput" accept="application/json" hidden /></label>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Categories</span><h3>默认类别</h3></div></div>
-            <div id="categoryManager" class="category-manager"></div>
-            <div class="inline-form">
-              <input id="newCategoryInput" placeholder="新增类别，如：会议" />
-              <button class="secondary-btn" id="addCategoryBtn">添加</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Projects & Papers</span><h3>项目 / 论文</h3></div></div>
-            <p class="muted">用于把时间归属到某篇论文或某个科研项目。你也可以在记录窗口里直接输入新项目。</p>
-            <div id="projectManager" class="category-manager"></div>
-            <div class="inline-form">
-              <input id="newProjectInput" placeholder="例如：歧管微通道 Paper 1" />
-              <button class="secondary-btn" id="addProjectBtn">添加</button>
-            </div>
-          </div>
-          <div class="card danger-zone">
-            <div class="section-heading-row compact"><div><span class="eyebrow">Danger Zone</span><h3>清空数据</h3></div></div>
-            <p class="muted">此操作不可撤销，建议先导出备份。已登录云端时，清空结果也会自动同步到云端。</p>
-            <button class="danger-btn" id="clearAllBtn">清空全部数据</button>
-          </div>
-          <div class="card">
-            <div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.3.1</h3></div></div>
-            <p class="muted">当前版本 V1.3.1：保留 V1.3 全部云端同步功能，并修复手机端登录可能长期停留在“正在登录”的问题。</p>
-            <p class="muted">云端不可用时自动回退到本地缓存；恢复网络后可继续同步。</p>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <div class="modal-backdrop" id="activityModalBackdrop">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <span class="eyebrow">Activity</span>
-          <h2 id="activityModalTitle">添加时间记录</h2>
-        </div>
-        <button class="icon-btn" id="closeActivityModalBtn">✕</button>
-      </div>
-      <form id="activityForm">
-        <input type="hidden" id="activityId" />
-        <div class="form-group">
-          <label for="activityTitle">做了什么</label>
-          <input id="activityTitle" required placeholder="例如：COMSOL 冷板模拟" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="activityDate">日期</label>
-            <input type="date" id="activityDate" required />
-          </div>
-          <div class="form-group">
-            <label for="activityCategory">类别</label>
-            <select id="activityCategory"></select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="activityProject">项目 / 论文</label>
-          <input id="activityProject" list="projectDatalist" placeholder="可选，例如：Paper 1 / 冷板项目" />
-          <div class="field-help">用于按论文或项目统计投入时间；输入新名称后会自动加入项目列表。</div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="activityStartTime">开始时间</label>
-            <input type="time" id="activityStartTime" required />
-          </div>
-          <div class="form-group">
-            <label for="activityEndTime">结束时间</label>
-            <input type="time" id="activityEndTime" required />
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="activityTags">标签</label>
-          <input id="activityTags" placeholder="输入多个标签，用逗号分隔，例如：COMSOL, 冷板, Paper1" />
-          <div class="field-help">支持自由创建标签；不需要提前设置。</div>
-        </div>
-        <div class="form-group">
-          <label for="activityNote">备注</label>
-          <textarea id="activityNote" placeholder="可选：实验参数、论文进展、下一步计划……"></textarea>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="danger-btn hidden" id="deleteActivityBtn">删除</button>
-          <div class="modal-actions-right">
-            <button type="button" class="secondary-btn" id="cancelActivityBtn">取消</button>
-            <button type="submit" class="primary-btn">保存记录</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <datalist id="projectDatalist"></datalist>
-
-  <div class="toast" id="toast"></div>
-
-  <script src="supabase-config.js?v=1.3.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
-  <script src="app.js?v=1.3.1"></script>
+<div class="app-shell">
+<aside class="sidebar">
+<div class="brand">
+<div class="brand-mark">P</div>
+<div>
+<div class="brand-title">PhD Tracker</div>
+<div class="brand-subtitle">Research Dashboard · V1.3.2</div>
+</div>
+</div>
+<nav class="nav-list" id="navList">
+<button class="nav-item active" data-page="today">🏠 <span>今天</span></button>
+<button class="nav-item" data-page="calendar">📅 <span>日历</span></button>
+<button class="nav-item" data-page="stats">📊 <span>统计</span></button>
+<button class="nav-item" data-page="memo">📝 <span>备忘录</span></button>
+<button class="nav-item" data-page="settings">⚙️ <span>设置</span></button>
+</nav>
+<div class="sidebar-footer">
+<div class="cloud-mini-status" id="cloudMiniStatus"><span class="cloud-dot local"></span><span>本地模式</span></div>
+<div class="footer-note">V1.3.2 支持 Supabase 云同步；并加强非账号字段的防自动填充。</div>
+<button class="secondary-btn full" id="quickExportBtn">导出备份</button>
+</div>
+</aside>
+<main class="main-content">
+<header class="topbar">
+<div>
+<h1 id="pageTitle">今天</h1>
+<p class="muted" id="pageSubtitle"></p>
+</div>
+<div class="topbar-actions">
+<button class="secondary-btn" id="jumpTodayBtn">回到今天</button>
+<button class="primary-btn" id="addActivityBtn">＋ 添加记录</button>
+</div>
+</header>
+<section class="page active" id="page-today">
+<div class="grid-two">
+<div class="card hero-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">今日概览</span>
+<h2 id="todayDateHeading">—</h2>
+</div>
+<div class="metric-block">
+<span class="metric-label">已记录</span>
+<strong id="todayTotalTime">0h 00m</strong>
+</div>
+</div>
+<div class="quick-entry-grid">
+<button class="quick-chip" data-quick-category="科研" data-quick-title="建模仿真" type="button">建模仿真</button>
+<button class="quick-chip" data-quick-category="科研" data-quick-title="阅读论文" type="button">阅读论文</button>
+<button class="quick-chip" data-quick-category="科研" data-quick-title="论文写作" type="button">论文写作</button>
+<button class="quick-chip" data-quick-category="科研" data-quick-title="数据处理" type="button">数据处理</button>
+<button class="quick-chip" data-quick-category="科研" data-quick-title="实验测试" type="button">实验测试</button>
+</div>
+</div>
+<div class="card">
+<div class="section-heading-row compact">
+<div>
+<span class="eyebrow">今日分类</span>
+<h3>时间分配</h3>
+</div>
+</div>
+<div class="summary-list" id="todayCategorySummary"></div>
+</div>
+</div>
+<div class="card timer-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Focus Timer</span>
+<h2>实时计时器</h2>
+</div>
+<div class="timer-status" id="timerStatus">未开始</div>
+</div>
+<div class="timer-layout">
+<div class="timer-display-wrap">
+<div class="timer-display" id="timerDisplay">00:00:00</div>
+<div class="timer-started-at" id="timerStartedAt">填写任务后点击开始，停止时会自动保存为时间记录。</div>
+</div>
+<div class="timer-fields">
+<div class="timer-field timer-field-wide">
+<label for="timerTitle">正在做什么</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTitle" name="phd_timerTitle_v132" placeholder="例如：COMSOL 冷板仿真" spellcheck="false"/>
+</div>
+<div class="timer-field">
+<label for="timerCategory">类别</label>
+<select aria-label="计时类别" id="timerCategory">
+<option value="科研">科研</option>
+<option value="学习">学习</option>
+<option value="会议">会议</option>
+<option value="生活">生活</option>
+<option value="运动">运动</option>
+<option value="娱乐">娱乐</option>
+</select>
+</div>
+<div class="timer-field">
+<label for="timerProject">项目 / 论文</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerProject" list="projectDatalist" name="phd_timerProject_v132" placeholder="例如：Paper 1" spellcheck="false"/>
+</div>
+<div class="timer-field timer-field-wide">
+<label for="timerTags">标签</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="timerTags" name="phd_timerTags_v132" placeholder="COMSOL, 冷板, 仿真" spellcheck="false"/>
+</div>
+</div>
+</div>
+<div class="timer-actions">
+<button class="primary-btn" id="timerStartBtn" type="button">▶ 开始计时</button>
+<button class="secondary-btn hidden" id="timerPauseBtn" type="button">暂停</button>
+<button class="primary-btn hidden" id="timerResumeBtn" type="button">继续</button>
+<button class="secondary-btn hidden" id="timerStopBtn" type="button">■ 停止并保存</button>
+<button class="danger-btn hidden" id="timerCancelBtn" type="button">放弃计时</button>
+</div>
+</div>
+<div class="card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Timeline</span>
+<h2>今日时间轴</h2>
+</div>
+<div class="date-controls">
+<button aria-label="前一天" class="icon-btn" id="prevDayBtn">←</button>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="todayDatePicker" name="phd_todayDatePicker_v132" type="date"/>
+<button aria-label="后一天" class="icon-btn" id="nextDayBtn">→</button>
+</div>
+</div>
+<div class="timeline" id="timeline"></div>
+</div>
+</section>
+<section class="page" id="page-calendar">
+<div class="calendar-layout">
+<div class="card calendar-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Calendar</span>
+<h2 id="calendarMonthLabel">—</h2>
+</div>
+<div class="date-controls">
+<button class="icon-btn" id="prevMonthBtn">←</button>
+<button class="secondary-btn" id="calendarTodayBtn">今天</button>
+<button class="icon-btn" id="nextMonthBtn">→</button>
+</div>
+</div>
+<div class="calendar-weekdays">
+<div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+</div>
+<div class="calendar-grid" id="calendarGrid"></div>
+</div>
+<div class="card day-detail-card">
+<div class="section-heading-row compact">
+<div>
+<span class="eyebrow">Selected Day</span>
+<h3 id="selectedDayLabel">—</h3>
+</div>
+<button class="primary-btn small" id="addForSelectedDayBtn">＋记录</button>
+</div>
+<div class="mini-stats" id="selectedDayStats"></div>
+<div class="compact-list" id="selectedDayActivities"></div>
+<div class="divider"></div>
+<div class="section-heading-row compact">
+<div>
+<span class="eyebrow">Memo</span>
+<h3>当天备忘</h3>
+</div>
+</div>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="selectedDayMemo" name="phd_selectedDayMemo_v132" placeholder="记录当天待办、实验想法、论文备注……" spellcheck="false"></textarea>
+<button class="secondary-btn full" id="saveDayMemoBtn">保存当天备忘</button>
+</div>
+</div>
+</section>
+<section class="page" id="page-stats">
+<div class="card stats-filter-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Analytics</span>
+<h2>时间统计</h2>
+</div>
+</div>
+<div class="range-buttons" id="rangeButtons">
+<button class="range-btn active" data-range="7">近7天</button>
+<button class="range-btn" data-range="30">近30天</button>
+<button class="range-btn" data-range="90">近90天</button>
+<button class="range-btn" data-range="365">近1年</button>
+<button class="range-btn" data-range="custom">自定义</button>
+</div>
+<div class="custom-range" id="customRangeWrap">
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsStartDate" name="phd_statsStartDate_v132" type="date"/>
+<span>至</span>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="statsEndDate" name="phd_statsEndDate_v132" type="date"/>
+<button class="secondary-btn" id="applyCustomRangeBtn">应用</button>
+</div>
+</div>
+<div class="stats-cards">
+<div class="metric-card"><span>总记录时间</span><strong id="statsTotalTime">0h 00m</strong></div>
+<div class="metric-card"><span>记录条数</span><strong id="statsRecordCount">0</strong></div>
+<div class="metric-card"><span>日均时间</span><strong id="statsDailyAvg">0h 00m</strong></div>
+<div class="metric-card"><span>最高投入日</span><strong id="statsBestDay">—</strong></div>
+</div>
+<div class="grid-two stats-grid">
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Category</span><h3>类别统计</h3></div></div>
+<div class="bar-list" id="categoryStats"></div>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Tags</span><h3>标签统计</h3></div></div>
+<div class="tag-stat-grid" id="tagStats"></div>
+</div>
+</div>
+<div class="card heatmap-card">
+<div class="section-heading-row">
+<div>
+<span class="eyebrow">Research Heatmap</span>
+<h3>年度科研热力图</h3>
+</div>
+<div class="date-controls">
+<button class="icon-btn" id="heatmapPrevYearBtn">←</button>
+<strong id="heatmapYearLabel">—</strong>
+<button class="icon-btn" id="heatmapNextYearBtn">→</button>
+</div>
+</div>
+<div class="heatmap-summary" id="heatmapSummary"></div>
+<div class="heatmap-scroll">
+<div class="heatmap-shell">
+<div class="heatmap-week-labels"><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span></div>
+<div>
+<div class="heatmap-months" id="heatmapMonths"></div>
+<div class="heatmap-grid" id="researchHeatmap"></div>
+</div>
+</div>
+</div>
+<div class="heatmap-legend"><span>少</span><i class="heat-0"></i><i class="heat-1"></i><i class="heat-2"></i><i class="heat-3"></i><i class="heat-4"></i><span>多</span><span class="heatmap-note">仅统计“科研”类别</span></div>
+</div>
+<div class="card project-stats-card">
+<div class="section-heading-row compact">
+<div><span class="eyebrow">Projects &amp; Papers</span><h3>项目 / 论文维度统计</h3></div>
+</div>
+<div class="project-stat-grid" id="projectStats"></div>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Trend</span><h3>每日投入趋势</h3></div></div>
+<div class="trend-chart" id="trendChart"></div>
+</div>
+</section>
+<section class="page" id="page-memo">
+<div class="memo-layout">
+<div class="card">
+<div class="section-heading-row">
+<div><span class="eyebrow">Memo</span><h2>备忘录</h2></div>
+<button class="primary-btn" id="newMemoBtn">＋ 新建</button>
+</div>
+<div class="memo-list" id="memoList"></div>
+</div>
+<div class="card memo-editor-card">
+<input autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-title-input" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoTitleInput" name="phd_memoTitleInput_v132" placeholder="备忘录标题" spellcheck="false"/>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" class="memo-big-textarea" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="memoContentInput" name="phd_memoContentInput_v132" placeholder="写下待办、灵感、实验记录、论文思路……" spellcheck="false"></textarea>
+<div class="memo-editor-actions">
+<button class="danger-btn" id="deleteMemoBtn">删除</button>
+<button class="primary-btn" id="saveMemoBtn">保存</button>
+</div>
+</div>
+</div>
+</section>
+<section class="page" id="page-settings">
+<div class="settings-grid">
+<div class="card cloud-settings-card settings-wide">
+<div class="section-heading-row">
+<div><span class="eyebrow">Cloud Sync</span><h3>Supabase 多设备同步</h3></div>
+<div class="cloud-badge local" id="cloudStatusBadge">本地模式</div>
+</div>
+<p class="muted">登录同一个账号后，电脑、手机和不同浏览器可以共享同一份 PhD Tracker 数据。本地缓存仍会保留。</p>
+<div class="cloud-config-grid">
+<div class="form-group">
+<label for="supabaseUrlInput">Supabase Project URL</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseUrlInput" name="phd_supabaseUrlInput_v132" placeholder="https://xxxx.supabase.co" spellcheck="false"/>
+</div>
+<div class="form-group">
+<label for="supabaseKeyInput">Publishable / anon key</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="supabaseKeyInput" name="phd_supabaseKeyInput_v132" placeholder="sb_publishable_... 或 anon key" spellcheck="false"/>
+</div>
+</div>
+<div class="settings-actions">
+<button class="secondary-btn" id="saveCloudConfigBtn">保存云端连接</button>
+<button class="secondary-btn" id="testCloudConfigBtn">测试连接</button>
+</div>
+<div class="cloud-auth-panel" id="cloudLoggedOutPanel">
+<div class="divider"></div>
+<div class="cloud-auth-grid">
+<div class="form-group">
+<label for="cloudEmailInput">邮箱</label>
+<input autocomplete="email" id="cloudEmailInput" inputmode="email" name="phd_cloud_email" placeholder="you@example.com" type="email"/>
+</div>
+<div class="form-group">
+<label for="cloudPasswordInput">密码</label>
+<input autocomplete="current-password" id="cloudPasswordInput" name="phd_cloud_password" placeholder="至少 6 位" type="password"/>
+</div>
+</div>
+<div class="settings-actions">
+<button class="primary-btn" id="cloudLoginBtn">登录并同步</button>
+<button class="secondary-btn" id="cloudSignupBtn">注册账号</button>
+</div>
+</div>
+<div class="cloud-auth-panel hidden" id="cloudLoggedInPanel">
+<div class="divider"></div>
+<div class="cloud-user-row">
+<div>
+<span class="muted">当前云端账号</span>
+<strong id="cloudUserEmail">—</strong>
+<small id="cloudLastSyncText">尚未同步</small>
+</div>
+<button class="secondary-btn" id="cloudLogoutBtn">退出登录</button>
+</div>
+<div class="settings-actions cloud-sync-actions">
+<button class="primary-btn" id="cloudSyncNowBtn">↻ 立即双向同步</button>
+<button class="secondary-btn" id="cloudUploadBtn">上传本机数据</button>
+<button class="secondary-btn" id="cloudDownloadBtn">下载云端数据</button>
+</div>
+<p class="field-help">正常使用时会自动同步。“上传本机数据”和“下载云端数据”仅用于手动覆盖恢复，点击前会再次确认。</p>
+</div>
+<div class="cloud-message" id="cloudMessage">尚未配置 Supabase。你仍可继续使用本地模式。</div>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Data</span><h3>数据备份</h3></div></div>
+<p class="muted">建议定期导出备份文件。导入会与当前数据合并。</p>
+<div class="settings-actions">
+<button class="primary-btn" id="exportBtn">导出全部数据</button>
+<label class="secondary-btn file-label">导入备份<input accept="application/json" hidden="" id="importInput" type="file"/></label>
+</div>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Categories</span><h3>默认类别</h3></div></div>
+<div class="category-manager" id="categoryManager"></div>
+<div class="inline-form">
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newCategoryInput" name="phd_newCategoryInput_v132" placeholder="新增类别，如：会议" spellcheck="false"/>
+<button class="secondary-btn" id="addCategoryBtn">添加</button>
+</div>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">Projects &amp; Papers</span><h3>项目 / 论文</h3></div></div>
+<p class="muted">用于把时间归属到某篇论文或某个科研项目。你也可以在记录窗口里直接输入新项目。</p>
+<div class="category-manager" id="projectManager"></div>
+<div class="inline-form">
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="newProjectInput" name="phd_newProjectInput_v132" placeholder="例如：歧管微通道 Paper 1" spellcheck="false"/>
+<button class="secondary-btn" id="addProjectBtn">添加</button>
+</div>
+</div>
+<div class="card danger-zone">
+<div class="section-heading-row compact"><div><span class="eyebrow">Danger Zone</span><h3>清空数据</h3></div></div>
+<p class="muted">此操作不可撤销，建议先导出备份。已登录云端时，清空结果也会自动同步到云端。</p>
+<button class="danger-btn" id="clearAllBtn">清空全部数据</button>
+</div>
+<div class="card">
+<div class="section-heading-row compact"><div><span class="eyebrow">About</span><h3>PhD Tracker V1.3.2</h3></div></div>
+<p class="muted">当前版本 V1.3.2：保留 V1.3.1 全部云端同步与手机端登录修复，并阻止浏览器/密码管理器把邮箱等账号信息误填到任务、项目、标签、类别与备忘录等非账号字段。</p>
+<p class="muted">云端不可用时自动回退到本地缓存；恢复网络后可继续同步。</p>
+</div>
+</div>
+</section>
+</main>
+</div>
+<div class="modal-backdrop" id="activityModalBackdrop">
+<div class="modal">
+<div class="modal-header">
+<div>
+<span class="eyebrow">Activity</span>
+<h2 id="activityModalTitle">添加时间记录</h2>
+</div>
+<button class="icon-btn" id="closeActivityModalBtn">✕</button>
+</div>
+<form autocomplete="off" id="activityForm">
+<input id="activityId" type="hidden"/>
+<div class="form-group">
+<label for="activityTitle">做了什么</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTitle" name="phd_activityTitle_v132" placeholder="例如：COMSOL 冷板模拟" required="" spellcheck="false"/>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="activityDate">日期</label>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityDate" name="phd_activityDate_v132" required="" type="date"/>
+</div>
+<div class="form-group">
+<label for="activityCategory">类别</label>
+<select id="activityCategory"></select>
+</div>
+</div>
+<div class="form-group">
+<label for="activityProject">项目 / 论文</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityProject" list="projectDatalist" name="phd_activityProject_v132" placeholder="可选，例如：Paper 1 / 冷板项目" spellcheck="false"/>
+<div class="field-help">用于按论文或项目统计投入时间；输入新名称后会自动加入项目列表。</div>
+</div>
+<div class="form-row">
+<div class="form-group">
+<label for="activityStartTime">开始时间</label>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityStartTime" name="phd_activityStartTime_v132" required="" type="time"/>
+</div>
+<div class="form-group">
+<label for="activityEndTime">结束时间</label>
+<input autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityEndTime" name="phd_activityEndTime_v132" required="" type="time"/>
+</div>
+</div>
+<div class="form-group">
+<label for="activityTags">标签</label>
+<input autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityTags" name="phd_activityTags_v132" placeholder="输入多个标签，用逗号分隔，例如：COMSOL, 冷板, Paper1" spellcheck="false"/>
+<div class="field-help">支持自由创建标签；不需要提前设置。</div>
+</div>
+<div class="form-group">
+<label for="activityNote">备注</label>
+<textarea autocapitalize="off" autocomplete="off" autocorrect="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-phd-no-autofill="true" id="activityNote" name="phd_activityNote_v132" placeholder="可选：实验参数、论文进展、下一步计划……" spellcheck="false"></textarea>
+</div>
+<div class="modal-actions">
+<button class="danger-btn hidden" id="deleteActivityBtn" type="button">删除</button>
+<div class="modal-actions-right">
+<button class="secondary-btn" id="cancelActivityBtn" type="button">取消</button>
+<button class="primary-btn" type="submit">保存记录</button>
+</div>
+</div>
+</form>
+</div>
+</div>
+<datalist id="projectDatalist"></datalist>
+<div class="toast" id="toast"></div>
+<script src="supabase-config.js?v=1.3.2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+<script src="app.js?v=1.3.2"></script>
 </body>
 </html>
