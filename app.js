@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'phdTrackerV1';
-const APP_VERSION = '1.3.4';
+const APP_VERSION = '1.3.5';
 const CLOUD_CONFIG_KEY = 'phdTrackerSupabaseConfigV1';
 const CLOUD_TABLE = 'phd_tracker_state';
 const CLOUD_SYNC_DELAY_MS = 900;
@@ -91,7 +91,7 @@ function clearMisplacedAccountAutofill(field) {
   if (!field || !('value' in field)) return;
   let browserAutofilled = false;
   try { browserAutofilled = field.matches(':-webkit-autofill'); } catch {}
-  // V1.3.4: credential fields never coexist with normal app fields unless the
+  // V1.3.5: credential fields never coexist with normal app fields unless the
   // user explicitly opens the auth modal. Any browser/password-manager autofill
   // detected on a protected business field is therefore unwanted and is cleared.
   if (browserAutofilled) {
@@ -115,6 +115,14 @@ function bindEvents() {
   els.todayNewMemoBtn?.addEventListener('click', () => {
     switchPage('memo');
     newMemo();
+  });
+
+  els.todoForm?.addEventListener('submit', addTodoFromForm);
+  els.todoViewDatePicker?.addEventListener('change', e => {
+    if (!e.target.value) return;
+    state.selectedDate = e.target.value;
+    state.selectedCalendarDate = e.target.value;
+    renderToday();
   });
 
   els.timerStartBtn.addEventListener('click', startTimer);
@@ -152,7 +160,7 @@ function bindEvents() {
   els.projectForm?.addEventListener('submit', e => { e.preventDefault(); addProject(); });
   els.clearAllBtn.addEventListener('click', clearAllData);
 
-  // V1.3.4 Supabase cloud sync + credential isolation
+  // V1.3.5 Supabase cloud sync + credential isolation
   els.saveCloudConfigBtn?.addEventListener('click', saveCloudConfigFromUI);
   els.testCloudConfigBtn?.addEventListener('click', testCloudConnection);
   els.openCloudAuthBtn?.addEventListener('click', openCloudAuthModal);
@@ -200,15 +208,24 @@ function ensureDefaults() {
   if (!state.data.meta.updatedAt) state.data.meta.updatedAt = new Date().toISOString();
   if (!Array.isArray(state.data.deletedActivities)) state.data.deletedActivities = [];
   if (!Array.isArray(state.data.deletedMemos)) state.data.deletedMemos = [];
+  if (!Array.isArray(state.data.todos)) state.data.todos = [];
+  if (!Array.isArray(state.data.deletedTodos)) state.data.deletedTodos = [];
+  state.data.todos.forEach(t => {
+    if (!t || typeof t !== 'object') return;
+    if (!t.category || typeof t.category !== 'string') t.category = '科研';
+    if (!Array.isArray(t.tags)) t.tags = [];
+    if (typeof t.completed !== 'boolean') t.completed = false;
+    if (t.project && !state.data.projects.includes(t.project)) state.data.projects.push(t.project);
+  });
   if (!state.data.dayMemoUpdatedAt || typeof state.data.dayMemoUpdatedAt !== 'object') state.data.dayMemoUpdatedAt = {};
   persistLocal(false, false);
 }
 
 function emptyData() {
   return {
-    activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [],
+    activities: [], categories: [...DEFAULT_CATEGORIES], memos: [], dayMemos: {}, projects: [], todos: [],
     timer: { active: false }, meta: { updatedAt: new Date().toISOString() },
-    deletedActivities: [], deletedMemos: [], dayMemoUpdatedAt: {}
+    deletedActivities: [], deletedMemos: [], deletedTodos: [], dayMemoUpdatedAt: {}
   };
 }
 
@@ -239,6 +256,7 @@ function renderAll() {
   renderProjectManager();
   populateProjectDatalist();
   populateTimerCategorySelect();
+  populateTodoCategorySelect();
   renderTimer();
   renderCloudUI();
   renderPageMeta();
@@ -273,6 +291,8 @@ function renderToday() {
   els.todayDateHeading.textContent = formatFullDate(date);
   els.todayDatePicker.value = state.selectedDate;
   els.pageSubtitle.textContent = state.currentPage === 'today' ? formatFullDate(date) : els.pageSubtitle.textContent;
+  if (els.timelineHeading) els.timelineHeading.textContent = state.selectedDate === toDateKey(new Date()) ? '今日时间轴' : `${state.selectedDate} 时间轴`;
+  renderTodayTodos();
   const activities = getActivitiesForDate(state.selectedDate);
   const total = activities.reduce((s, a) => s + durationMinutes(a), 0);
   els.todayTotalTime.textContent = formatMinutes(total);
@@ -304,6 +324,188 @@ function renderToday() {
       <div class="timeline-duration">${formatMinutes(durationMinutes(a))}</div>
     </button>`).join('');
   els.timeline.querySelectorAll('[data-activity-id]').forEach(btn => btn.addEventListener('click', () => openActivityModalById(btn.dataset.activityId)));
+}
+
+
+function populateTodoCategorySelect() {
+  if (!els.todoCategory) return;
+  const current = els.todoCategory.value;
+  els.todoCategory.innerHTML = state.data.categories.map(c => `<option>${escapeHtml(c)}</option>`).join('');
+  if (current && state.data.categories.includes(current)) els.todoCategory.value = current;
+  else if (state.data.categories.includes('科研')) els.todoCategory.value = '科研';
+}
+
+function setTodoFormDefaults(forceDate = false) {
+  if (!els.todoDate) return;
+  if (forceDate || !els.todoDate.value) els.todoDate.value = state.selectedDate;
+  if (!els.todoStartTime.value || !els.todoEndTime.value) {
+    const now = new Date();
+    const rounded = Math.ceil((now.getHours() * 60 + now.getMinutes()) / 30) * 30;
+    const start = Math.min(rounded, 22 * 60 + 30);
+    const end = Math.min(start + 60, 23 * 60 + 59);
+    els.todoStartTime.value = minutesToTime(start);
+    els.todoEndTime.value = minutesToTime(end);
+  }
+  populateTodoCategorySelect();
+}
+
+function addTodoFromForm(e) {
+  e.preventDefault();
+  const title = els.todoTitle.value.trim();
+  const date = els.todoDate.value;
+  const startTime = els.todoStartTime.value;
+  const endTime = els.todoEndTime.value;
+  if (!title) return toast('请填写待办事项');
+  if (!date || !startTime || !endTime) return toast('请填写日期和计划时间');
+  if (timeToMinutes(endTime) <= timeToMinutes(startTime)) return toast('计划结束时间必须晚于开始时间');
+  const project = els.todoProject.value.trim();
+  if (project) ensureProject(project);
+  const now = new Date().toISOString();
+  state.data.todos.push({
+    id: uid(), title, date, startTime, endTime,
+    category: els.todoCategory.value || '科研',
+    project,
+    tags: normalizeTags(els.todoTags.value),
+    completed: false,
+    completedAt: null,
+    completionStatus: null,
+    linkedActivityId: null,
+    createdAt: now,
+    updatedAt: now
+  });
+  state.selectedDate = date;
+  state.selectedCalendarDate = date;
+  saveData();
+  els.todoTitle.value = '';
+  els.todoProject.value = '';
+  els.todoTags.value = '';
+  populateProjectDatalist();
+  renderToday();
+  toast(`待办已添加到 ${date}`);
+}
+
+function renderTodayTodos() {
+  if (!els.todoList) return;
+  setTodoFormDefaults();
+  if (els.todoViewDatePicker) els.todoViewDatePicker.value = state.selectedDate;
+  if (els.todoDate && document.activeElement !== els.todoDate) els.todoDate.value = state.selectedDate;
+  const todos = (state.data.todos || [])
+    .filter(t => t.date === state.selectedDate)
+    .sort((a,b) => {
+      if (!!a.completed !== !!b.completed) return a.completed ? 1 : -1;
+      return timeToMinutes(a.startTime || '00:00') - timeToMinutes(b.startTime || '00:00');
+    });
+  const completed = todos.filter(t => t.completed).length;
+  if (els.todoSummary) els.todoSummary.textContent = `${completed} / ${todos.length} 完成`;
+  if (els.todoDateHint) els.todoDateHint.textContent = `${state.selectedDate} · 为任务设置计划时段，点击“完成”后可自动写入时间轴。`;
+  if (!todos.length) {
+    els.todoList.innerHTML = '<div class="todo-empty">这一天还没有待办。可以直接在上方添加。</div>';
+    return;
+  }
+  els.todoList.innerHTML = todos.map(t => {
+    const completedLabel = t.completionStatus === 'late' ? '逾期完成' : t.completionStatus === 'early' ? '提前完成' : '按计划完成';
+    const status = t.completed
+      ? `<span class="todo-status done">${completedLabel}</span>`
+      : `<span class="todo-status pending">待完成</span>`;
+    const tags = (t.tags || []).map(tag => `<span class="tag-pill">#${escapeHtml(tag)}</span>`).join('');
+    const linked = t.linkedActivityId ? '<span class="todo-timeline-mark">✓ 已写入时间轴</span>' : '';
+    return `<div class="todo-item ${t.completed ? 'completed' : ''}" data-todo-id="${escapeHtml(t.id)}">
+      <div class="todo-check-col"><button class="todo-complete-btn ${t.completed ? 'undo' : ''}" type="button" data-todo-action="${t.completed ? 'undo' : 'complete'}" data-todo-id="${escapeHtml(t.id)}">${t.completed ? '↶ 撤销' : '✓ 完成'}</button></div>
+      <div class="todo-main">
+        <div class="todo-item-head"><strong>${escapeHtml(t.title)}</strong>${status}</div>
+        <div class="todo-meta"><span>🕒 ${escapeHtml(t.startTime)}–${escapeHtml(t.endTime)}</span><span class="category-pill">${escapeHtml(t.category || '科研')}</span>${t.project ? `<span>📁 ${escapeHtml(t.project)}</span>` : ''}${linked}</div>
+        ${tags ? `<div class="todo-tags">${tags}</div>` : ''}
+      </div>
+      <button class="todo-delete-btn" type="button" aria-label="删除待办" title="删除待办" data-todo-action="delete" data-todo-id="${escapeHtml(t.id)}">✕</button>
+    </div>`;
+  }).join('');
+  els.todoList.querySelectorAll('[data-todo-action]').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.todoId;
+    const action = btn.dataset.todoAction;
+    if (action === 'complete') completeTodo(id);
+    else if (action === 'undo') undoTodo(id);
+    else if (action === 'delete') deleteTodo(id);
+  }));
+}
+
+function plannedTodoDateTime(todo, timeValue) {
+  if (!todo?.date || !timeValue) return null;
+  const d = new Date(`${todo.date}T${timeValue}:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function completeTodo(id) {
+  const todo = (state.data.todos || []).find(t => t.id === id);
+  if (!todo || todo.completed) return;
+  const now = new Date();
+  const plannedStart = plannedTodoDateTime(todo, todo.startTime);
+  const plannedEnd = plannedTodoDateTime(todo, todo.endTime);
+  let completionStatus = 'on_time';
+  if (plannedStart && now.getTime() < plannedStart.getTime()) completionStatus = 'early';
+  else if (plannedEnd && now.getTime() > plannedEnd.getTime()) completionStatus = 'late';
+
+  let shouldCreateActivity = true;
+  if (completionStatus === 'late') {
+    shouldCreateActivity = confirm('这个待办已经超过计划结束时间。\n\n点击“确定”：仍按原计划时段写入时间轴。\n点击“取消”：只标记为完成，不写入时间轴。');
+  } else if (completionStatus === 'early') {
+    shouldCreateActivity = confirm('这个待办在计划开始时间之前就完成了。\n\n点击“确定”：仍按原计划时段写入时间轴。\n点击“取消”：只标记为提前完成，不写入未来时间段。');
+  }
+  let linkedActivityId = null;
+  if (shouldCreateActivity) {
+    linkedActivityId = uid();
+    const stamp = new Date().toISOString();
+    state.data.activities.push({
+      id: linkedActivityId,
+      title: todo.title,
+      date: todo.date,
+      startTime: todo.startTime,
+      endTime: todo.endTime,
+      category: todo.category || '科研',
+      project: todo.project || '',
+      tags: todo.tags || [],
+      note: completionStatus === 'on_time' ? '由待办事项按计划完成自动生成' : completionStatus === 'early' ? '由待办事项提前完成后手动确认生成' : '由待办事项逾期完成后手动确认生成',
+      createdAt: stamp,
+      updatedAt: stamp
+    });
+    state.data.deletedActivities = (state.data.deletedActivities || []).filter(t => t.id !== linkedActivityId);
+  }
+  todo.completed = true;
+  todo.completedAt = now.toISOString();
+  todo.completionStatus = completionStatus;
+  todo.linkedActivityId = linkedActivityId;
+  todo.updatedAt = now.toISOString();
+  saveData();
+  renderAll();
+  toast(shouldCreateActivity ? '待办已完成，并写入时间轴' : '待办已标记完成');
+}
+
+function undoTodo(id) {
+  const todo = (state.data.todos || []).find(t => t.id === id);
+  if (!todo || !todo.completed) return;
+  if (todo.linkedActivityId) {
+    state.data.activities = state.data.activities.filter(a => a.id !== todo.linkedActivityId);
+    state.data.deletedActivities = upsertTombstone(state.data.deletedActivities, todo.linkedActivityId);
+  }
+  todo.completed = false;
+  todo.completedAt = null;
+  todo.completionStatus = null;
+  todo.linkedActivityId = null;
+  todo.updatedAt = new Date().toISOString();
+  saveData();
+  renderAll();
+  toast('已撤销完成状态');
+}
+
+function deleteTodo(id) {
+  const todo = (state.data.todos || []).find(t => t.id === id);
+  if (!todo) return;
+  const extra = todo.linkedActivityId ? ' 已生成的时间轴记录会保留。' : '';
+  if (!confirm(`确定删除待办“${todo.title}”吗？${extra}`)) return;
+  state.data.todos = state.data.todos.filter(t => t.id !== id);
+  state.data.deletedTodos = upsertTombstone(state.data.deletedTodos, id);
+  saveData();
+  renderTodayTodos();
+  toast('待办已删除');
 }
 
 function renderCalendar() {
@@ -722,7 +924,7 @@ async function importData(e) {
 
 function clearAllData() {
   if (!confirm('确定清空全部本地数据吗？此操作无法撤销。')) return;
-  if (!confirm('最后确认一次：所有时间记录、备忘录和设置都会被清空。')) return;
+  if (!confirm('最后确认一次：所有时间记录、待办事项、备忘录和设置都会被清空。')) return;
   localStorage.removeItem(STORAGE_KEY);
   state.data = emptyData();
   state.editingMemoId = null;
@@ -880,7 +1082,7 @@ function clearTimerInputs() {
 
 
 // ------------------------------
-// V1.3.4 Supabase cloud sync - credential isolation + mobile auth hardened
+// V1.3.5 Supabase cloud sync - credential isolation + mobile auth hardened
 // ------------------------------
 class CloudTimeoutError extends Error {
   constructor(label, ms) {
@@ -1002,7 +1204,7 @@ function cleanupCloudClientRuntime() {
 
 function newSupabaseClient(config) {
   if (!window.supabase?.createClient) throw new Error('Supabase 客户端脚本加载失败，请检查网络后刷新页面');
-  // V1.3.4 keeps the pinned Supabase JS release and isolates credential fields in an ephemeral modal.
+  // V1.3.5 keeps the pinned Supabase JS release and isolates credential fields in an ephemeral modal.
   return window.supabase.createClient(config.url, config.key, {
     auth: {
       persistSession: true,
@@ -1154,7 +1356,7 @@ async function createCloudClient(config) {
       // Crucially, do not block the whole app on mobile if getSession never resolves.
       state.cloud.user = null;
       renderCloudUI();
-      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.4 会自动重试。', 'error');
+      setCloudMessage('登录状态检查超时，但网页仍可使用。请直接输入账号密码登录；V1.3.5 会自动重试。', 'error');
       return;
     }
     throw err;
@@ -1482,15 +1684,18 @@ function mergeDataStates(localData, remoteData) {
 
   const deletedActivities = mergeTombstones(local.deletedActivities, remote.deletedActivities);
   const deletedMemos = mergeTombstones(local.deletedMemos, remote.deletedMemos);
+  const deletedTodos = mergeTombstones(local.deletedTodos, remote.deletedTodos);
   const activities = mergeEntities(local.activities, remote.activities, deletedActivities);
   const memos = mergeEntities(local.memos, remote.memos, deletedMemos);
+  const todos = mergeEntities(local.todos, remote.todos, deletedTodos);
   const dayMemoMerged = mergeDayMemos(local, remote);
 
-  const projectsUsed = activities.map(a => a.project).filter(Boolean);
-  const categoriesUsed = activities.map(a => a.category).filter(Boolean);
+  const projectsUsed = [...activities, ...todos].map(a => a.project).filter(Boolean);
+  const categoriesUsed = [...activities, ...todos].map(a => a.category).filter(Boolean);
   return {
     activities,
     memos,
+    todos,
     categories: [...new Set([...(newer.categories || DEFAULT_CATEGORIES), ...categoriesUsed])],
     projects: [...new Set([...(newer.projects || []), ...projectsUsed])],
     dayMemos: dayMemoMerged.values,
@@ -1498,6 +1703,7 @@ function mergeDataStates(localData, remoteData) {
     timer: deepClone(newer.timer || { active: false }),
     deletedActivities,
     deletedMemos,
+    deletedTodos,
     meta: {
       ...deepClone(newer.meta || {}),
       updatedAt: new Date(Math.max(lTime || 0, rTime || 0, Date.now())).toISOString()
